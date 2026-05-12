@@ -1,0 +1,221 @@
+.screen {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(164, 212, 255, 0.45) 0, rgba(164, 212, 255, 0.08) 24%, transparent 40%),
+    radial-gradient(circle at 90% 86%, rgba(236, 72, 153, 0.28) 0, rgba(236, 72, 153, 0.08) 18%, transparent 36%),
+    linear-gradient(120deg, #0f64e7 0%, #3b74f2 35%, #514bcb 72%, #5532c8 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.backdropOrbs {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 0 100%, rgba(1, 45, 157, 0.85), transparent 30%),
+    radial-gradient(circle at 100% 0, rgba(126, 58, 242, 0.5), transparent 25%);
+}
+
+.brandPanel,
+.loginPanel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.5rem, 5vw, 4rem);
+}
+
+.brandInner {
+  max-width: 580px;
+  color: #091a57;
+}
+
+.brandTitle {
+  margin: 0;
+  font-size: clamp(2.2rem, 5vw, 5.1rem);
+  line-height: 1;
+  font-weight: 900;
+  color: #1d4fff;
+  letter-spacing: -0.045em;
+}
+
+.brandTitle span {
+  color: #06185f;
+}
+
+.brandTitle .brandDot {
+  color: #1d4fff;
+}
+
+.brandSubtitle {
+  margin: 0.35rem 0 1.6rem;
+  font-size: clamp(1rem, 2vw, 2rem);
+  font-weight: 600;
+  color: rgba(5, 25, 90, 0.92);
+}
+
+.brandDivider {
+  height: 1px;
+  width: min(96%, 520px);
+  background: rgba(30, 64, 175, 0.35);
+  margin: 1.4rem 0;
+}
+
+.brandText {
+  margin: 0 0 0.9rem;
+  font-size: clamp(1rem, 1.22vw, 2rem);
+  color: rgba(2, 26, 102, 0.92);
+  max-width: 520px;
+}
+
+.loginCard {
+  width: min(92vw, 680px);
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.07));
+  box-shadow: 0 40px 80px rgba(12, 22, 60, 0.35);
+  backdrop-filter: blur(18px);
+  padding: clamp(1.4rem, 2vw, 2.4rem);
+  display: grid;
+  gap: 0.85rem;
+}
+
+.avatar {
+  width: 86px;
+  height: 86px;
+  border-radius: 999px;
+  margin: 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.16);
+  color: #f8fafc;
+}
+
+.welcome {
+  margin: 0;
+  text-align: center;
+  font-size: clamp(1.8rem, 3vw, 2.8rem);
+  color: #f8fafc;
+  font-weight: 800;
+}
+
+.company {
+  margin: 0;
+  text-align: center;
+  color: #0b38c4;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.fieldLabel {
+  font-size: 1.16rem;
+  color: rgba(241, 245, 249, 0.94);
+  font-weight: 700;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.31);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.11);
+  padding: 0.92rem 1rem;
+  color: rgba(241, 245, 249, 0.84);
+}
+
+.field input,
+.field select {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f8fafc;
+  font-size: 1.17rem;
+  min-width: 0;
+}
+
+.field input::placeholder {
+  color: rgba(241, 245, 249, 0.6);
+}
+
+.field select option {
+  color: #0b1228;
+}
+
+.eyeButton {
+  border: none;
+  background: transparent;
+  color: rgba(241, 245, 249, 0.85);
+  display: inline-flex;
+  cursor: pointer;
+}
+
+.submit {
+  margin-top: 0.3rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: linear-gradient(95deg, #3b82f6, #8552f5);
+  color: #fff;
+  min-height: 60px;
+  font-size: 2rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  cursor: pointer;
+}
+
+.submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.error {
+  margin: 0.2rem 0 0;
+  color: #fca5a5;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 1140px) {
+  .screen {
+    grid-template-columns: 1fr;
+  }
+
+  .brandPanel {
+    padding-bottom: 0.5rem;
+  }
+
+  .brandInner {
+    text-align: center;
+  }
+
+  .brandDivider {
+    margin: 1rem auto;
+  }
+
+  .brandText {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .loginPanel {
+    padding-top: 0.5rem;
+  }
+
+  .loginCard {
+    width: min(95vw, 760px);
+  }
+}

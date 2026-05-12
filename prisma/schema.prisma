@@ -1,13 +1,1406 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model activities {
+  id                                                                                             String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id                                                                                     String                          @db.Uuid
+  element_id                                                                                     String                          @db.Uuid
+  code                                                                                           String
+  name                                                                                           String
+  description                                                                                    String?
+  is_active                                                                                      Boolean                         @default(true)
+  owner_id                                                                                       String?                         @db.Uuid
+  created_at                                                                                     DateTime                        @default(now()) @db.Timestamptz(6)
+  updated_at                                                                                     DateTime                        @default(now()) @db.Timestamptz(6)
+  company                                                                                        company                         @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  elements                                                                                       elements                        @relation(fields: [element_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  graph_activities_dependencies_graph_activities_dependencies_activity_idToactivities            graph_activities_dependencies[] @relation("graph_activities_dependencies_activity_idToactivities")
+  graph_activities_dependencies_graph_activities_dependencies_dependency_activity_idToactivities graph_activities_dependencies[] @relation("graph_activities_dependencies_dependency_activity_idToactivities")
+  graph_map_run_sa_activities                                                                    graph_map_run_sa_activities[]
+  run_ra_risks                                                                                   run_ra_risks[]
+
+  @@unique([element_id, code])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_activity_criticality_level {
+  id                String              @id(map: "key_activity_criticality_level_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code              String              @unique(map: "key_activity_criticality_level_code_key")
+  name              String
+  sort_order        Int
+  is_active         Boolean             @default(true)
+  incident_register incident_register[]
+  monitoring_event  monitoring_event[]
+  monitoring_rule   monitoring_rule[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_activity_frequency {
+  id         String  @id(map: "key_activity_frequency_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String  @unique(map: "key_activity_frequency_code_key")
+  name       String
+  sort_order Int
+  is_active  Boolean @default(true)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_activity_review {
+  id         String  @id(map: "key_activity_review_frequency_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String  @unique(map: "key_activity_review_frequency_code_key")
+  name       String
+  sort_order Int
+  is_active  Boolean @default(true)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_appetite {
+  id             String    @id(map: "company_objective_appetite_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code           String    @unique(map: "company_objective_appetite_code_key")
+  scope_type     String
+  scope_id       String    @db.Uuid
+  appetite_level String
+  tolerance_min  Decimal?  @db.Decimal(20, 6)
+  tolerance_max  Decimal?  @db.Decimal(20, 6)
+  metric_name    String
+  metric_unit    String?
+  effective_from DateTime  @db.Date
+  is_active      String
+  approved_by    String?   @db.Uuid
+  approved_at    DateTime? @db.Timestamptz(6)
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime  @default(now()) @db.Timestamptz(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_control_cobertura {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  value          Int      @unique @db.SmallInt
+  code           String   @unique
+  name           String
+  description    String
+  min_percentage Decimal  @db.Decimal(5, 2)
+  max_percentage Decimal  @db.Decimal(5, 2)
+  sort_order     Int      @default(0) @db.SmallInt
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_control_effectiveness {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  value       Int      @unique @db.SmallInt
+  code        String   @unique
+  name        String
+  description String
+  sort_order  Int      @default(0) @db.SmallInt
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_control_effectiveness_peso {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dimension  String   @unique
+  peso       Decimal  @db.Decimal(5, 2)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_control_type {
+  id                    String            @id(map: "control_types_pkey") @db.Uuid
+  code                  String            @unique(map: "control_types_code_key")
+  name                  String
+  description           String
+  control_nature        String
+  mitigates_probability Boolean           @default(false)
+  mitigates_impact      Boolean           @default(false)
+  detects_event         Boolean           @default(false)
+  enables_response      Boolean           @default(false)
+  is_hard_gate          Boolean           @default(false)
+  status_id             Int
+  created_at            DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime          @default(now()) @db.Timestamptz(6)
+  run_ra_controls       run_ra_controls[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_controls_category {
+  id              String            @id(map: "controls_category_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String            @unique(map: "controls_category_code_key")
+  name            String
+  description     String?
+  sort_order      Int               @default(0) @db.SmallInt
+  is_active       Boolean           @default(true)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  run_ra_controls run_ra_controls[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_controls_frequency {
+  id              String            @id(map: "controls_frequency_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String            @unique(map: "controls_frequency_code_key")
+  name            String
+  description     String
+  sort_order      Int
+  status_id       Int
+  is_active       Boolean           @default(true)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  run_ra_controls run_ra_controls[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_frequency {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title       String  @unique @db.VarChar(120)
+  description String?
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_ra_category {
+  id          String   @id(map: "risk_category_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique(map: "uq_risk_category_code")
+  name        String   @unique(map: "uq_risk_category_name")
+  description String?
+  status      Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([name], map: "idx_risk_category_name")
+  @@index([status], map: "idx_risk_category_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_ra_guia {
+  level        String
+  description  String
+  impact_score Int
+  categoria    String?
+
+  @@ignore
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_ra_impact {
+  catalog_impact_id BigInt   @id(map: "catalog_impact_pkey") @default(autoincrement())
+  code              String   @unique(map: "catalog_impact_code_key") @db.VarChar(50)
+  name              String   @db.VarChar(100)
+  description       String?
+  ordinal           Int      @unique(map: "catalog_impact_ordinal_key")
+  numeric_value     Decimal? @db.Decimal(10, 4)
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_ra_lifecycle {
+  id                                                                                                String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                                                                                              String                         @unique
+  name                                                                                              String
+  description                                                                                       String?
+  sort_order                                                                                        Int                            @db.SmallInt
+  is_terminal                                                                                       Boolean                        @default(false)
+  is_active                                                                                         Boolean                        @default(true)
+  created_at                                                                                        DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                                                                                        DateTime                       @default(now()) @db.Timestamptz(6)
+  catalog_ra_lifecycle_history_catalog_ra_lifecycle_history_from_lifecycle_idTocatalog_ra_lifecycle catalog_ra_lifecycle_history[] @relation("catalog_ra_lifecycle_history_from_lifecycle_idTocatalog_ra_lifecycle")
+  catalog_ra_lifecycle_history_catalog_ra_lifecycle_history_to_lifecycle_idTocatalog_ra_lifecycle   catalog_ra_lifecycle_history[] @relation("catalog_ra_lifecycle_history_to_lifecycle_idTocatalog_ra_lifecycle")
+
+  @@index([is_active], map: "idx_catalog_ra_lifecycle_active")
+  @@index([code], map: "idx_catalog_ra_lifecycle_code")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_ra_lifecycle_history {
+  id                                                                                        String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id                                                                                 String                @unique(map: "uq_catalog_ra_lifecycle_history_current", where: raw("(is_current = true)")) @db.Uuid
+  from_lifecycle_id                                                                         String?               @db.Uuid
+  to_lifecycle_id                                                                           String                @db.Uuid
+  progress_percent                                                                          Int                   @default(0) @db.SmallInt
+  change_reason                                                                             String?
+  completion_reason                                                                         String?
+  changed_by                                                                                String?               @db.Uuid
+  changed_at                                                                                DateTime              @default(now()) @db.Timestamptz(6)
+  is_current                                                                                Boolean               @default(true)
+  metadata                                                                                  Json                  @default("{}")
+  catalog_ra_lifecycle_catalog_ra_lifecycle_history_from_lifecycle_idTocatalog_ra_lifecycle catalog_ra_lifecycle? @relation("catalog_ra_lifecycle_history_from_lifecycle_idTocatalog_ra_lifecycle", fields: [from_lifecycle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  run_ra                                                                                    run_ra                @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  catalog_ra_lifecycle_catalog_ra_lifecycle_history_to_lifecycle_idTocatalog_ra_lifecycle   catalog_ra_lifecycle  @relation("catalog_ra_lifecycle_history_to_lifecycle_idTocatalog_ra_lifecycle", fields: [to_lifecycle_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([changed_at(sort: Desc)], map: "idx_catalog_ra_lifecycle_history_changed_at")
+  @@index([from_lifecycle_id], map: "idx_catalog_ra_lifecycle_history_from_lifecycle_id")
+  @@index([run_ra_id], map: "idx_catalog_ra_lifecycle_history_run_ra_id")
+  @@index([to_lifecycle_id], map: "idx_catalog_ra_lifecycle_history_to_lifecycle_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_ra_probability {
+  catalog_probability_id BigInt   @id(map: "catalog_probability_pkey") @default(autoincrement())
+  code                   String   @unique(map: "catalog_probability_code_key") @db.VarChar(50)
+  name                   String   @db.VarChar(100)
+  description            String?
+  ordinal                Int      @unique(map: "catalog_probability_ordinal_key")
+  numeric_value          Decimal? @db.Decimal(10, 4)
+  is_active              Boolean  @default(true)
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_ra_valoration {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  decision              String                  @unique
+  description           String?
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  modified_at           DateTime                @default(now()) @db.Timestamptz(6)
+  is_active             Boolean                 @default(true)
+  incident_register     incident_register[]
+  run_ra_risk_treatment run_ra_risk_treatment[]
+  run_ra_risks          run_ra_risks[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_risk_category {
+  id           String         @id(map: "ra_risks_category_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code         String         @unique(map: "ra_risks_category_code_key")
+  name         String
+  description  String?
+  is_active    Boolean        @default(true)
+  sort_order   Int            @default(0) @db.SmallInt
+  created_at   DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime       @default(now()) @db.Timestamptz(6)
+  run_ra_risks run_ra_risks[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model catalog_risk_level {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique
+  name        String
+  description String?
+  min_score   Int      @db.SmallInt
+  max_score   Int      @db.SmallInt
+  color       String?
+  sort_order  Int      @default(0) @db.SmallInt
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model company {
+  id                            String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                          String
+  legal_name                    String?
+  tax_id                        String?                         @unique
+  sector                        String?
+  industry                      String?
+  country                       String?
+  city                          String?
+  status                        String                          @default("ACTIVE")
+  created_at                    DateTime                        @default(now()) @db.Timestamptz(6)
+  updated_at                    DateTime                        @default(now()) @db.Timestamptz(6)
+  code                          String?
+  description                   String?
+  activities                    activities[]
+  elements                      elements[]
+  graph_activities_dependencies graph_activities_dependencies[]
+  graph_map_run_sa_activities   graph_map_run_sa_activities[]
+  graph_run_sa                  graph_run_sa[]
+  users                         users[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model company_objective {
+  objective_id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id            String         @default(dbgenerated("'00000000-0000-0000-0000-000000000000'::uuid")) @db.Uuid
+  objective_code        String         @db.VarChar(100)
+  objective_name        String         @db.VarChar(255)
+  objective_description String?
+  rationale             Json?
+  sequence_order        Int?
+  is_active             Boolean?       @default(true)
+  created_at            DateTime?      @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime?      @default(now()) @db.Timestamptz(6)
+  kpi                   String?
+  id_appetite           String?        @db.Uuid
+  run_ra_risks          run_ra_risks[]
+}
+
+model company_resource_catalog {
+  id_resource               String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nombre                    String
+  descripcion               String?
+  fecha_creacion            DateTime                   @default(now()) @db.Timestamptz(6)
+  category_resource         String?                    @db.Uuid
+  company_resource_category company_resource_category? @relation(fields: [category_resource], references: [id_category_resource], onDelete: NoAction, onUpdate: NoAction, map: "fk_company_resource_catalog_category")
+  graph_risk_cascade        graph_risk_cascade[]
+}
+
+model company_resource_category {
+  id_category_resource     String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                     String                     @unique
+  nombre                   String
+  descripcion              String?
+  fecha_creacion           DateTime                   @default(now()) @db.Timestamptz(6)
+  company_resource_catalog company_resource_catalog[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model element_types {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String     @unique
+  name        String
+  description String?
+  status      Boolean    @default(true)
+  created_at  DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime   @default(now()) @db.Timestamptz(6)
+  elements    elements[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model elements {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id        String              @db.Uuid
+  code              String
+  name              String
+  description       String?
+  is_active         Boolean             @default(true)
+  leader_id         String?             @db.Uuid
+  element_type_id   String              @db.Uuid
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  activities        activities[]
+  company           company             @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  element_types     element_types       @relation(fields: [element_type_id], references: [id], onUpdate: NoAction)
+  incident_register incident_register[]
+
+  @@unique([company_id, code])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model graph_activities_alternative_level {
+  id                            String                          @id(map: "structural_alternative_level_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                          String                          @unique(map: "structural_alternative_level_code_key") @db.VarChar(50)
+  name                          String                          @db.VarChar(100)
+  weight                        Decimal                         @db.Decimal(5, 2)
+  description                   String?
+  sort_order                    Int                             @default(0)
+  is_active                     Boolean                         @default(true)
+  created_at                    DateTime                        @default(now()) @db.Timestamp(6)
+  updated_at                    DateTime                        @default(now()) @db.Timestamp(6)
+  graph_activities_dependencies graph_activities_dependencies[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model graph_activities_dependencies {
+  id                                                                          String                               @id(map: "activities_graph_dependencies_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id                                                                  String                               @db.Uuid
+  activity_id                                                                 String                               @db.Uuid
+  dependency_resource_id                                                      String                               @db.Uuid
+  dependency_activity_id                                                      String?                              @db.Uuid
+  dependency_system_name                                                      String?                              @db.VarChar(255)
+  dependency_data_name                                                        String?                              @db.VarChar(255)
+  dependency_person_id                                                        String?                              @db.Uuid
+  dependency_provider_name                                                    String?                              @db.VarChar(255)
+  dependency_document_name                                                    String?                              @db.VarChar(255)
+  failure_effect_id                                                           String                               @db.Uuid
+  dependency_strength_id                                                      String                               @db.Uuid
+  alternative_level_id                                                        String                               @db.Uuid
+  control_id                                                                  String?                              @db.Uuid
+  description                                                                 String?
+  is_active                                                                   Boolean                              @default(true)
+  created_at                                                                  DateTime                             @default(now()) @db.Timestamp(6)
+  updated_at                                                                  DateTime                             @default(now()) @db.Timestamp(6)
+  propagation_delay_hours                                                     Decimal?                             @db.Decimal(10, 2)
+  confidence_level                                                            Int?                                 @db.SmallInt
+  activities_graph_activities_dependencies_activity_idToactivities            activities                           @relation("graph_activities_dependencies_activity_idToactivities", fields: [activity_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_graph_activities_dependencies_activity")
+  graph_activities_alternative_level                                          graph_activities_alternative_level   @relation(fields: [alternative_level_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_graph_activities_dependencies_alternative")
+  company                                                                     company                              @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_graph_activities_dependencies_company")
+  run_ra_controls                                                             run_ra_controls?                     @relation(fields: [control_id], references: [id], onUpdate: NoAction, map: "fk_graph_activities_dependencies_control")
+  activities_graph_activities_dependencies_dependency_activity_idToactivities activities?                          @relation("graph_activities_dependencies_dependency_activity_idToactivities", fields: [dependency_activity_id], references: [id], onUpdate: NoAction, map: "fk_graph_activities_dependencies_dependency_activity")
+  graph_activities_failure_effect                                             graph_activities_failure_effect      @relation(fields: [failure_effect_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_graph_activities_dependencies_failure_effect")
+  graph_activities_dependency_strength                                        graph_activities_dependency_strength @relation(fields: [dependency_strength_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_graph_activities_dependencies_strength")
+
+  @@index([activity_id], map: "idx_graph_activities_dependencies_activity_id")
+  @@index([company_id], map: "idx_graph_activities_dependencies_company_id")
+  @@index([control_id], map: "idx_graph_activities_dependencies_control_id")
+  @@index([dependency_resource_id], map: "idx_graph_activities_dependencies_dependency_resource_id")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model graph_activities_dependency_resource {
+  id          String   @id(map: "structural_dependency_resource_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique(map: "structural_dependency_resource_code_key") @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?
+  sort_order  Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @default(now()) @db.Timestamp(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model graph_activities_dependency_strength {
+  id                            String                          @id(map: "structural_dependency_strength_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                          String                          @unique(map: "structural_dependency_strength_code_key") @db.VarChar(50)
+  name                          String                          @db.VarChar(100)
+  weight                        Decimal                         @db.Decimal(5, 2)
+  description                   String?
+  sort_order                    Int                             @default(0)
+  is_active                     Boolean                         @default(true)
+  created_at                    DateTime                        @default(now()) @db.Timestamp(6)
+  updated_at                    DateTime                        @default(now()) @db.Timestamp(6)
+  graph_activities_dependencies graph_activities_dependencies[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model graph_activities_failure_effect {
+  id                            String                          @id(map: "structural_failure_effect_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                          String                          @unique(map: "structural_failure_effect_code_key") @db.VarChar(50)
+  name                          String                          @db.VarChar(100)
+  description                   String?
+  sort_order                    Int                             @default(0)
+  is_active                     Boolean                         @default(true)
+  created_at                    DateTime                        @default(now()) @db.Timestamp(6)
+  updated_at                    DateTime                        @default(now()) @db.Timestamp(6)
+  graph_activities_dependencies graph_activities_dependencies[]
+}
+
+model graph_activity_catalog_criticality {
+  code                   String @id
+  label                  String
+  operational_definition String
+  decision_signal        String
+}
+
+model graph_activity_catalog_impact {
+  code                     String @id
+  label                    String
+  operational_definition   String
+  time_to_impact_reference String
+  effect_profile           String
+  decision_signal          String
+}
+
+model graph_activity_resource {
+  resource_id                            String                                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                                   String
+  resource_type                          String
+  owner_id                               String?                                  @db.Uuid
+  substitutability                       String
+  criticality                            String
+  created_at                             DateTime                                 @default(now()) @db.Timestamptz(6)
+  updated_at                             DateTime                                 @default(now()) @db.Timestamptz(6)
+  graph_map_activity_resource_dependency graph_map_activity_resource_dependency[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model graph_catalog_run_lifecycle {
+  id                                                                                                     String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                                                                                                   String                        @unique @db.VarChar(50)
+  name                                                                                                   String                        @db.VarChar(100)
+  description                                                                                            String?
+  sort_order                                                                                             Int                           @default(0)
+  is_active                                                                                              Boolean                       @default(true)
+  created_at                                                                                             DateTime                      @default(now()) @db.Timestamp(6)
+  updated_at                                                                                             DateTime                      @default(now()) @db.Timestamp(6)
+  graph_run_lifecycle_history_graph_run_lifecycle_history_from_lifecycle_idTograph_catalog_run_lifecycle graph_run_lifecycle_history[] @relation("graph_run_lifecycle_history_from_lifecycle_idTograph_catalog_run_lifecycle")
+  graph_run_lifecycle_history_graph_run_lifecycle_history_to_lifecycle_idTograph_catalog_run_lifecycle   graph_run_lifecycle_history[] @relation("graph_run_lifecycle_history_to_lifecycle_idTograph_catalog_run_lifecycle")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model graph_catalog_run_methodology {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique @db.VarChar(100)
+  name        String   @db.VarChar(150)
+  description String?
+  sort_order  Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @default(now()) @db.Timestamp(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model graph_catalog_run_scope_type {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique @db.VarChar(50)
+  name        String   @db.VarChar(100)
+  description String?
+  sort_order  Int      @default(0)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @default(now()) @db.Timestamp(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model graph_control_evidence {
+  evidence_eval_id      String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_id                String             @db.Uuid
+  risk_cascade_id       String             @db.Uuid
+  control_id            String             @db.Uuid
+  evidence_exists       Boolean            @default(false)
+  evidence_current      Boolean            @default(false)
+  evidence_sufficient   Boolean            @default(false)
+  evidence_traceable    Boolean            @default(false)
+  evidence_capture_mode String             @default("manual")
+  evidence_strength     Decimal            @default(0) @db.Decimal(5, 4)
+  evidence_notes        String?
+  created_at            DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime           @default(now()) @db.Timestamptz(6)
+  graph_risk_cascade    graph_risk_cascade @relation(fields: [risk_cascade_id], references: [risk_cascade_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_graph_control_evidence_cascade")
+  graph_run_sa          graph_run_sa       @relation(fields: [run_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_graph_control_evidence_run")
+
+  @@unique([run_id, control_id], map: "uq_graph_control_evidence_run_control")
+  @@index([run_id], map: "ix_graph_control_evidence_run")
+}
+
+model graph_control_hardgate {
+  id                    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_id                String             @db.Uuid
+  risk_cascade_id       String             @db.Uuid
+  control_id            String             @db.Uuid
+  is_hard_gate          Boolean            @default(false)
+  hardgate_reason       String?
+  answered_yes_question String?
+  created_at            DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime           @default(now()) @db.Timestamptz(6)
+  graph_risk_cascade    graph_risk_cascade @relation(fields: [risk_cascade_id], references: [risk_cascade_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_graph_control_hardgate_cascade")
+  graph_run_sa          graph_run_sa       @relation(fields: [run_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_graph_control_hardgate_run")
+
+  @@unique([run_id, control_id], map: "uq_graph_control_hardgate_run_control")
+  @@index([risk_cascade_id], map: "idx_graph_control_hardgate_cascade")
+  @@index([control_id], map: "idx_graph_control_hardgate_control")
+  @@index([is_hard_gate], map: "idx_graph_control_hardgate_is_hard_gate")
+  @@index([run_id], map: "idx_graph_control_hardgate_run")
+  @@index([run_id], map: "ix_graph_control_hardgate_run")
+}
+
+model graph_map_activity_resource_dependency {
+  activity_id             String                  @db.Uuid
+  resource_id             String                  @db.Uuid
+  dependency_strength     String
+  substitutability        String
+  failure_effect          String
+  created_at              DateTime                @default(now()) @db.Timestamptz(6)
+  graph_activity_resource graph_activity_resource @relation(fields: [resource_id], references: [resource_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_activity_resource_dependency_resource")
+
+  @@id([activity_id, resource_id])
+  @@index([activity_id], map: "ix_graph_map_activity_resource_dependency_activity")
+  @@index([resource_id], map: "ix_graph_map_activity_resource_dependency_resource")
+}
+
+model graph_map_run_sa_activities {
+  id               String       @id(map: "graph_run_sa_activities_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id       String       @db.Uuid
+  run_sa_id        String       @db.Uuid
+  activity_id      String       @db.Uuid
+  selected_by      String       @db.Uuid
+  selected_at      DateTime     @default(now()) @db.Timestamptz(6)
+  is_active        Boolean      @default(true)
+  created_at       DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime     @default(now()) @db.Timestamptz(6)
+  impact_code      String?
+  criticality_code String?
+  activities       activities   @relation(fields: [activity_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "graph_run_sa_activities_activity_id_fkey")
+  company          company      @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "graph_run_sa_activities_company_id_fkey")
+  graph_run_sa     graph_run_sa @relation(fields: [run_sa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "graph_run_sa_activities_run_sa_id_fkey")
+  users            users        @relation(fields: [selected_by], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "graph_run_sa_activities_selected_by_fkey")
+
+  @@unique([run_sa_id, activity_id], map: "ux_graph_run_sa_activities_run_activity")
+  @@index([is_active], map: "ix_graph_run_sa_activities_active")
+  @@index([company_id], map: "ix_graph_run_sa_activities_company")
+  @@index([run_sa_id], map: "ix_graph_run_sa_activities_run")
+}
+
+model graph_risk_cascade {
+  risk_cascade_id            String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_sa_id                  String                     @db.Uuid
+  risk_id                    String                     @db.Uuid
+  cascade_code               String
+  affected_resource_id       String?                    @db.Uuid
+  notes                      String?
+  created_at                 DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime                   @default(now()) @db.Timestamptz(6)
+  graph_control_evidence     graph_control_evidence[]
+  graph_control_hardgate     graph_control_hardgate[]
+  company_resource_catalog   company_resource_catalog?  @relation(fields: [affected_resource_id], references: [id_resource], onDelete: NoAction, onUpdate: NoAction, map: "fk_graph_risk_cascade_affected_resource")
+  graph_risk_catalog_cascade graph_risk_catalog_cascade @relation(fields: [cascade_code], references: [code], onDelete: NoAction, onUpdate: NoAction, map: "fk_graph_risk_cascade_catalog")
+  graph_run_sa               graph_run_sa               @relation(fields: [run_sa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_graph_risk_cascade_run_sa")
+
+  @@unique([run_sa_id, risk_id, affected_resource_id], map: "uq_graph_risk_cascade_run_risk_resource", where: raw("(affected_resource_id IS NOT NULL)"))
+  @@index([affected_resource_id], map: "ix_graph_risk_cascade_resource")
+  @@index([risk_id], map: "ix_graph_risk_cascade_risk")
+  @@index([run_sa_id], map: "ix_graph_risk_cascade_run")
+}
+
+model graph_risk_catalog_cascade {
+  code                   String               @id
+  label                  String
+  operational_definition String
+  decision_signal        String
+  graph_risk_cascade     graph_risk_cascade[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model graph_run_lifecycle_history {
+  id                                                                                                     String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_sa_id                                                                                              String                       @db.Uuid
+  from_lifecycle_id                                                                                      String?                      @db.Uuid
+  to_lifecycle_id                                                                                        String                       @db.Uuid
+  progress_percent                                                                                       Decimal                      @default(0) @db.Decimal(5, 2)
+  change_reason                                                                                          String?
+  completion_reason                                                                                      String?
+  changed_by                                                                                             String                       @db.Uuid
+  changed_at                                                                                             DateTime                     @default(now()) @db.Timestamp(6)
+  is_current                                                                                             Boolean                      @default(true)
+  metadata                                                                                               Json?
+  users                                                                                                  users                        @relation(fields: [changed_by], references: [id], onUpdate: NoAction, map: "fk_graph_run_lifecycle_history_changed_by")
+  graph_catalog_run_lifecycle_graph_run_lifecycle_history_from_lifecycle_idTograph_catalog_run_lifecycle graph_catalog_run_lifecycle? @relation("graph_run_lifecycle_history_from_lifecycle_idTograph_catalog_run_lifecycle", fields: [from_lifecycle_id], references: [id], onUpdate: NoAction, map: "fk_graph_run_lifecycle_history_from_lifecycle")
+  graph_run_sa                                                                                           graph_run_sa                 @relation(fields: [run_sa_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_graph_run_lifecycle_history_graph_run_sa")
+  graph_catalog_run_lifecycle_graph_run_lifecycle_history_to_lifecycle_idTograph_catalog_run_lifecycle   graph_catalog_run_lifecycle  @relation("graph_run_lifecycle_history_to_lifecycle_idTograph_catalog_run_lifecycle", fields: [to_lifecycle_id], references: [id], onUpdate: NoAction, map: "fk_graph_run_lifecycle_history_to_lifecycle")
+
+  @@index([is_current], map: "idx_graph_run_lifecycle_history_is_current")
+  @@index([run_sa_id], map: "idx_graph_run_lifecycle_history_run_sa_id")
+  @@index([to_lifecycle_id], map: "idx_graph_run_lifecycle_history_to_lifecycle_id")
+}
+
+model graph_run_sa {
+  id                          String                        @id(map: "run_sa_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id                  String                        @db.Uuid
+  code                        String                        @db.VarChar(50)
+  title                       String                        @db.VarChar(255)
+  scope_type                  String                        @db.VarChar(50)
+  assessment_date             DateTime                      @default(dbgenerated("CURRENT_DATE")) @db.Date
+  status                      String                        @default("draft") @db.VarChar(50)
+  version                     Int                           @default(1)
+  methodology                 String                        @db.VarChar(100)
+  model_version               String                        @db.VarChar(50)
+  created_by                  String                        @db.Uuid
+  created_at                  DateTime                      @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime                      @default(now()) @db.Timestamp(6)
+  graph_control_evidence      graph_control_evidence[]
+  graph_control_hardgate      graph_control_hardgate[]
+  graph_map_run_sa_activities graph_map_run_sa_activities[]
+  graph_risk_cascade          graph_risk_cascade[]
+  graph_run_lifecycle_history graph_run_lifecycle_history[]
+  company                     company                       @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_graph_run_sa_company")
+  users                       users                         @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_graph_run_sa_created_by")
+
+  @@unique([company_id, code], map: "uq_graph_run_sa_company_code")
+  @@index([company_id], map: "idx_graph_run_sa_company_id")
+  @@index([scope_type], map: "idx_graph_run_sa_scope_type")
+  @@index([status], map: "idx_graph_run_sa_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model incident_register {
+  id                                 String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  incident_code                      String                             @unique @db.VarChar(50)
+  title                              String                             @db.VarChar(255)
+  description                        String
+  occurred_at                        DateTime                           @db.Timestamptz(6)
+  detected_at                        DateTime                           @db.Timestamptz(6)
+  reported_by                        String                             @db.VarChar(255)
+  element_id                         String                             @db.Uuid
+  risk_id                            String?                            @db.Uuid
+  control_id                         String?                            @db.Uuid
+  control_name_if_not_registered     String?                            @db.VarChar(255)
+  incident_type                      String                             @db.VarChar(50)
+  cause                              String?
+  observed_impact                    String
+  severity_id                        String                             @db.Uuid
+  status                             String                             @default("En proceso") @db.VarChar(30)
+  initial_evidence                   String?
+  requires_root_cause_analysis       Boolean                            @default(false)
+  action_plan_id                     String?                            @db.Uuid
+  due_date                           DateTime?                          @db.Date
+  closed_at                          DateTime?                          @db.Timestamptz(6)
+  lesson_learned                     String?
+  created_at                         DateTime                           @default(now()) @db.Timestamptz(6)
+  updated_at                         DateTime                           @default(now()) @db.Timestamptz(6)
+  is_loss_event                      Boolean                            @default(false)
+  loss_amount                        Decimal?                           @db.Decimal(18, 2)
+  loss_currency                      String?                            @db.VarChar(10)
+  loss_description                   String?
+  catalog_ra_valoration              catalog_ra_valoration?             @relation(fields: [action_plan_id], references: [id], map: "fk_incident_action_plan")
+  run_ra_controls                    run_ra_controls?                   @relation(fields: [control_id], references: [id], map: "fk_incident_control")
+  elements                           elements                           @relation(fields: [element_id], references: [id], map: "fk_incident_element")
+  run_ra_risks                       run_ra_risks?                      @relation(fields: [risk_id], references: [id], map: "fk_incident_risk")
+  catalog_activity_criticality_level catalog_activity_criticality_level @relation(fields: [severity_id], references: [id], map: "fk_incident_severity")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model map_run_ra_risk_controls {
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_risk_id               String                         @db.Uuid
+  run_ra_control_id            String                         @db.Uuid
+  mitigation_strength          Decimal?                       @db.Decimal(5, 2)
+  effect_type                  String?
+  reduces_probability          Boolean                        @default(false)
+  reduces_impact               Boolean                        @default(false)
+  rationale                    String?
+  coverage_notes               String?
+  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  run_ra_controls              run_ra_controls                @relation(fields: [run_ra_control_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra_risks                 run_ra_risks                   @relation(fields: [run_ra_risk_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra_control_effectiveness run_ra_control_effectiveness[]
+
+  @@unique([run_ra_risk_id, run_ra_control_id])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model map_users_x_roles {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String      @db.Uuid
+  role_id     String      @db.Uuid
+  is_active   Boolean     @default(true)
+  created_at  DateTime    @default(now()) @db.Timestamp(6)
+  updated_at  DateTime    @default(now()) @db.Timestamp(6)
+  users       users       @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_map_users_x_roles_user")
+  users_roles users_roles @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model monitoring_due_item {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type    String
+  entity_id      String   @db.Uuid
+  due_type       String
+  title          String
+  description    String?
+  due_date       DateTime @db.Timestamptz(6)
+  warning_days   Int      @default(7)
+  responsible_id String?  @db.Uuid
+  status         String   @default("active")
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([due_date], map: "idx_monitoring_due_item_due_date")
+  @@index([due_type], map: "idx_monitoring_due_item_due_type")
+  @@index([entity_type, entity_id], map: "idx_monitoring_due_item_entity")
+  @@index([responsible_id], map: "idx_monitoring_due_item_responsible")
+  @@index([status], map: "idx_monitoring_due_item_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model monitoring_event {
+  id                                 String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category                           String
+  title                              String
+  description                        String?
+  criticality_level_id               String                             @db.Uuid
+  status                             String                             @default("active")
+  object_type                        String
+  object_id                          String                             @db.Uuid
+  event_date                         DateTime                           @default(now()) @db.Timestamptz(6)
+  due_date                           DateTime?                          @db.Timestamptz(6)
+  responsible_id                     String?                            @db.Uuid
+  source                             String?
+  trigger_type                       String?
+  current_value                      Decimal?                           @db.Decimal
+  threshold_value                    Decimal?                           @db.Decimal
+  metadata                           Json?
+  created_at                         DateTime                           @default(now()) @db.Timestamptz(6)
+  updated_at                         DateTime                           @default(now()) @db.Timestamptz(6)
+  catalog_activity_criticality_level catalog_activity_criticality_level @relation(fields: [criticality_level_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  monitoring_event_response          monitoring_event_response[]
+
+  @@unique([category, object_type, object_id, trigger_type], map: "uq_monitoring_event_active_dedup", where: raw("(status = ANY (ARRAY['active'::text, 'monitored'::text]))"))
+  @@index([category], map: "idx_monitoring_event_category")
+  @@index([created_at], map: "idx_monitoring_event_created_at")
+  @@index([criticality_level_id], map: "idx_monitoring_event_criticality")
+  @@index([due_date], map: "idx_monitoring_event_due_date")
+  @@index([object_type, object_id], map: "idx_monitoring_event_object")
+  @@index([responsible_id], map: "idx_monitoring_event_responsible")
+  @@index([status], map: "idx_monitoring_event_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model monitoring_event_response {
+  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  monitoring_event_id String           @db.Uuid
+  response_type       String
+  response_status     String           @default("registered")
+  title               String?
+  description         String?
+  assigned_to         String?          @db.Uuid
+  performed_by        String?          @db.Uuid
+  response_date       DateTime         @default(now()) @db.Timestamptz(6)
+  next_review_date    DateTime?        @db.Timestamptz(6)
+  metadata            Json?
+  created_at          DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime         @default(now()) @db.Timestamptz(6)
+  monitoring_event    monitoring_event @relation(fields: [monitoring_event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([assigned_to], map: "idx_monitoring_event_response_assigned_to")
+  @@index([monitoring_event_id], map: "idx_monitoring_event_response_event")
+  @@index([performed_by], map: "idx_monitoring_event_response_performed_by")
+  @@index([response_date], map: "idx_monitoring_event_response_response_date")
+  @@index([response_status], map: "idx_monitoring_event_response_status")
+  @@index([response_type], map: "idx_monitoring_event_response_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model monitoring_external_source {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source_type         String
+  source_name         String
+  source_url          String?
+  title               String
+  description         String?
+  detected_at         DateTime  @default(now()) @db.Timestamptz(6)
+  published_at        DateTime? @db.Timestamptz(6)
+  relevance_status    String    @default("pending")
+  related_entity_type String?
+  related_entity_id   String?   @db.Uuid
+  raw_data            Json?
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([detected_at], map: "idx_monitoring_external_source_detected_at")
+  @@index([related_entity_type, related_entity_id], map: "idx_monitoring_external_source_related_entity")
+  @@index([relevance_status], map: "idx_monitoring_external_source_status")
+  @@index([source_type], map: "idx_monitoring_external_source_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model monitoring_internal_source {
+  id            String   @id(map: "monitoring_log_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entity_type   String
+  entity_id     String   @db.Uuid
+  action        String
+  title         String?
+  description   String?
+  old_data      Json?
+  new_data      Json?
+  user_id       String?  @db.Uuid
+  source_screen String?
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model monitoring_rule {
+  id                                 String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                               String                             @unique
+  name                               String
+  description                        String?
+  category                           String
+  trigger_type                       String
+  criticality_level_id               String                             @db.Uuid
+  source_type                        String
+  object_type                        String?
+  condition_expression               String?
+  action_expression                  String?
+  is_active                          Boolean                            @default(true)
+  created_at                         DateTime                           @default(now()) @db.Timestamptz(6)
+  updated_at                         DateTime                           @default(now()) @db.Timestamptz(6)
+  catalog_activity_criticality_level catalog_activity_criticality_level @relation(fields: [criticality_level_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([category], map: "idx_monitoring_rule_category")
+  @@index([criticality_level_id], map: "idx_monitoring_rule_criticality")
+  @@index([is_active], map: "idx_monitoring_rule_is_active")
+  @@index([source_type], map: "idx_monitoring_rule_source_type")
+  @@index([trigger_type], map: "idx_monitoring_rule_trigger_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model monitoring_run {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_type               String
+  status                 String    @default("started")
+  started_at             DateTime  @default(now()) @db.Timestamptz(6)
+  finished_at            DateTime? @db.Timestamptz(6)
+  triggered_by           String?   @db.Uuid
+  source                 String?
+  scanned_internal_count Int       @default(0)
+  scanned_external_count Int       @default(0)
+  scanned_due_count      Int       @default(0)
+  events_created_count   Int       @default(0)
+  events_updated_count   Int       @default(0)
+  events_resolved_count  Int       @default(0)
+  error_message          String?
+  metadata               Json?
+  created_at             DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([started_at], map: "idx_monitoring_run_started_at")
+  @@index([status], map: "idx_monitoring_run_status")
+  @@index([triggered_by], map: "idx_monitoring_run_triggered_by")
+  @@index([run_type], map: "idx_monitoring_run_type")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model pesos {
+  id          Int    @id
+  descripcion String @db.VarChar(50)
+  peso        Int
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra {
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id                   String                         @db.Uuid
+  code                         String
+  title                        String
+  description                  String?
+  assessment_level             String?
+  object_type                  String?
+  object_id                    String?                        @db.Uuid
+  owner_id                     String?                        @db.Uuid
+  approver_id                  String?                        @db.Uuid
+  status                       String                         @default("DRAFT")
+  version                      Int                            @default(1)
+  started_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  catalog_ra_lifecycle_history catalog_ra_lifecycle_history?
+  run_ra_analysis_sensitivity  run_ra_analysis_sensitivity[]
+  run_ra_appetite_rules        run_ra_appetite_rules[]
+  run_ra_change_history        run_ra_change_history[]
+  run_ra_contexto_evaluacion   run_ra_contexto_evaluacion[]
+  run_ra_contexto_interno      run_ra_contexto_interno[]
+  run_ra_contexto_negocio      run_ra_contexto_negocio[]
+  run_ra_contexto_reglas       run_ra_contexto_reglas[]
+  run_ra_control_effectiveness run_ra_control_effectiveness[]
+  run_ra_control_tests         run_ra_control_tests[]
+  run_ra_controls              run_ra_controls[]
+  run_ra_evidence              run_ra_evidence[]
+  run_ra_monitoring            run_ra_monitoring[]
+  run_ra_risk_analysis         run_ra_risk_analysis[]
+  run_ra_risks                 run_ra_risks[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_analysis_sensitivity {
+  id                      String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id               String               @db.Uuid
+  run_ra_risk_analysis_id String               @db.Uuid
+  parameter_name          String
+  base_value              Decimal?             @db.Decimal(10, 2)
+  changed_value           Decimal?             @db.Decimal(10, 2)
+  effect_on_risk_score    Decimal?             @db.Decimal(10, 2)
+  sensitivity_level       String?
+  notes                   String?
+  created_at              DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime             @default(now()) @db.Timestamptz(6)
+  run_ra                  run_ra               @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra_risk_analysis    run_ra_risk_analysis @relation(fields: [run_ra_risk_analysis_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_appetite_rules {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id               String   @db.Uuid
+  version                 Int      @default(1)
+  risk_level              String
+  min_score               Decimal  @db.Decimal(10, 2)
+  max_score               Decimal  @db.Decimal(10, 2)
+  zone                    String
+  default_decision        String
+  decision_criteria       String
+  requires_justification  Boolean  @default(false)
+  requires_treatment_plan Boolean  @default(false)
+  requires_escalation     Boolean  @default(false)
+  requires_monitoring     Boolean  @default(false)
+  requires_activity_stop  Boolean  @default(false)
+  display_order           Int      @db.SmallInt
+  created_at              DateTime @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime @default(now()) @db.Timestamptz(6)
+  run_ra                  run_ra   @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_change_history {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id      String   @db.Uuid
+  entity_name    String
+  entity_id      String?  @db.Uuid
+  change_type    String
+  change_summary String
+  previous_value Json?
+  new_value      Json?
+  changed_by     String?  @db.Uuid
+  changed_at     DateTime @default(now()) @db.Timestamptz(6)
+  run_ra         run_ra   @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_contexto_evaluacion {
+  id                     String    @id(map: "run_ra_general_context_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id              String    @db.Uuid
+  objective              String
+  scope                  String
+  inclusions             String?
+  exclusions             String?
+  evaluated_period_start DateTime? @db.Date
+  evaluated_period_end   DateTime? @db.Date
+  methodology            String?
+  assumptions            Json      @default("[]")
+  constraints            Json      @default("[]")
+  information_sources    Json      @default("[]")
+  created_at             DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime  @default(now()) @db.Timestamptz(6)
+  risk_appetite          String?
+  element_id             String?   @db.Uuid
+  activity_id            String?   @db.Uuid
+  run_ra                 run_ra    @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "run_ra_general_context_run_ra_id_fkey")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_contexto_interno {
+  id                   String   @id(map: "run_ra_context_factors_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id            String   @db.Uuid
+  context_type         String
+  factor_category      String
+  factor_name          String
+  description          String?
+  relevance_level      Int?     @db.SmallInt
+  impact_on_assessment String?
+  source               String?
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime @default(now()) @db.Timestamptz(6)
+  run_ra               run_ra   @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "run_ra_context_factors_run_ra_id_fkey")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_contexto_interno_externo {
+  id                   String   @id(map: "ra_context_factors_pkey_1") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ra_id                String   @db.Uuid
+  context_type         String
+  factor_category      String
+  factor_name          String
+  description          String?
+  relevance_level      Int?     @db.SmallInt
+  impact_on_assessment String?
+  source               String?
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_contexto_negocio {
+  id                       String   @id(map: "run_ra_business_context_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id                String   @db.Uuid
+  regulatory_environment   String?
+  organizational_structure String?
+  main_processes           Json     @default("[]")
+  general_policies         Json     @default("[]")
+  key_stakeholders         Json     @default("[]")
+  adopted_frameworks       Json     @default("[]")
+  created_at               DateTime @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime @default(now()) @db.Timestamptz(6)
+  run_ra                   run_ra   @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "run_ra_business_context_run_ra_id_fkey")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_contexto_reglas {
+  id                           String   @id(map: "run_ra_criteria_rules_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id                    String   @db.Uuid
+  version                      Int      @default(1)
+  impact_scale                 Json
+  probability_scale            Json
+  risk_calculation_method      String   @default("IMPACT_X_PROBABILITY")
+  inherent_formula             String?
+  residual_formula             String?
+  control_effectiveness_method String?
+  risk_matrix                  Json?
+  treatment_threshold          Decimal? @db.Decimal(10, 2)
+  unacceptable_threshold       Decimal? @db.Decimal(10, 2)
+  combination_rules            Json     @default("{}")
+  notes                        String?
+  created_at                   DateTime @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime @default(now()) @db.Timestamptz(6)
+  run_ra                       run_ra   @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "run_ra_criteria_rules_run_ra_id_fkey")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_control_effectiveness {
+  id                           String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id                    String                   @db.Uuid
+  run_ra_risk_analysis_id      String                   @db.Uuid
+  map_run_ra_risk_control_id   String                   @db.Uuid
+  design_effectiveness         Decimal                  @db.Decimal(5, 2)
+  implementation_effectiveness Decimal                  @db.Decimal(5, 2)
+  operation_effectiveness      Decimal                  @db.Decimal(5, 2)
+  evidence_effectiveness       Decimal                  @db.Decimal(5, 2)
+  overall_effectiveness        Decimal                  @db.Decimal(5, 2)
+  effectiveness_rationale      String?
+  created_at                   DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime                 @default(now()) @db.Timestamptz(6)
+  map_run_ra_risk_controls     map_run_ra_risk_controls @relation(fields: [map_run_ra_risk_control_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra                       run_ra                   @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra_risk_analysis         run_ra_risk_analysis     @relation(fields: [run_ra_risk_analysis_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([run_ra_risk_analysis_id, map_run_ra_risk_control_id])
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_control_tests {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id            String            @db.Uuid
+  run_ra_control_id    String            @db.Uuid
+  test_name            String
+  test_description     String?
+  test_objective       String?
+  test_result          String?
+  effectiveness_result Decimal?          @db.Decimal(5, 2)
+  tested_by            String?           @db.Uuid
+  tested_at            DateTime?         @db.Timestamptz(6)
+  status               String            @default("PENDING")
+  created_at           DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime          @default(now()) @db.Timestamptz(6)
+  expiration_date      DateTime?         @db.Timestamptz(6)
+  run_ra_controls      run_ra_controls   @relation(fields: [run_ra_control_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra               run_ra            @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra_evidence      run_ra_evidence[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_controls {
+  id                            String                          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id                     String                          @db.Uuid
+  code                          String?
+  name                          String
+  description                   String?
+  control_type                  String?                         @db.Uuid
+  control_nature                String?                         @db.Uuid
+  owner_id                      String?                         @db.Uuid
+  frequency                     String?                         @db.Uuid
+  is_existing                   Boolean                         @default(true)
+  is_active                     Boolean                         @default(true)
+  created_at                    DateTime                        @default(now()) @db.Timestamptz(6)
+  updated_at                    DateTime                        @default(now()) @db.Timestamptz(6)
+  source_control_id             String?
+  design                        Int?                            @db.SmallInt
+  implementation                Int?                            @db.SmallInt
+  operation                     Int?                            @db.SmallInt
+  id_risk                       String?                         @db.Uuid
+  cobertura                     Decimal?                        @db.Decimal(5, 2)
+  next_execution_date           DateTime?                       @db.Timestamptz(6)
+  next_review_date              DateTime?                       @db.Timestamptz(6)
+  graph_activities_dependencies graph_activities_dependencies[]
+  incident_register             incident_register[]
+  map_run_ra_risk_controls      map_run_ra_risk_controls[]
+  run_ra_control_tests          run_ra_control_tests[]
+  catalog_controls_category     catalog_controls_category?      @relation(fields: [control_nature], references: [id], onUpdate: NoAction, map: "fk_run_ra_controls_control_nature")
+  catalog_control_type          catalog_control_type?           @relation(fields: [control_type], references: [id], onUpdate: NoAction, map: "fk_run_ra_controls_control_type")
+  catalog_controls_frequency    catalog_controls_frequency?     @relation(fields: [frequency], references: [id], onUpdate: NoAction, map: "fk_run_ra_controls_frequency")
+  users                         users?                          @relation(fields: [owner_id], references: [id], onUpdate: NoAction, map: "fk_run_ra_controls_owner")
+  run_ra                        run_ra                          @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra_evidence               run_ra_evidence[]
+  run_ra_monitoring             run_ra_monitoring[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_evidence {
+  id                     String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id              String                @db.Uuid
+  run_ra_risk_id         String?               @db.Uuid
+  run_ra_control_id      String?               @db.Uuid
+  run_ra_control_test_id String?               @db.Uuid
+  run_ra_monitoring_id   String?               @db.Uuid
+  evidence_type          String
+  title                  String
+  description            String?
+  file_url               String?
+  external_reference     String?
+  collected_by           String?               @db.Uuid
+  collected_at           DateTime              @default(now()) @db.Timestamptz(6)
+  validity_status        String                @default("PENDING")
+  created_at             DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime              @default(now()) @db.Timestamptz(6)
+  expiration_date        DateTime?             @db.Timestamptz(6)
+  run_ra_controls        run_ra_controls?      @relation(fields: [run_ra_control_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra_control_tests   run_ra_control_tests? @relation(fields: [run_ra_control_test_id], references: [id], onUpdate: NoAction)
+  run_ra                 run_ra                @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra_monitoring      run_ra_monitoring?    @relation(fields: [run_ra_monitoring_id], references: [id], onUpdate: NoAction)
+  run_ra_risks           run_ra_risks?         @relation(fields: [run_ra_risk_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_monitoring {
+  id                       String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id                String            @db.Uuid
+  run_ra_risk_id           String?           @db.Uuid
+  run_ra_control_id        String?           @db.Uuid
+  monitoring_type          String
+  title                    String
+  description              String?
+  responsible_id           String?           @db.Uuid
+  due_date                 DateTime?         @db.Date
+  review_date              DateTime?         @db.Date
+  status                   String            @default("OPEN")
+  alert_enabled            Boolean           @default(true)
+  alert_date               DateTime?         @db.Date
+  critical_assumption      String?
+  context_change           String?
+  control_performance_note String?
+  incident_note            String?
+  requires_recalculation   Boolean           @default(false)
+  recalculation_reason     String?
+  created_at               DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime          @default(now()) @db.Timestamptz(6)
+  run_ra_evidence          run_ra_evidence[]
+  run_ra_controls          run_ra_controls?  @relation(fields: [run_ra_control_id], references: [id], onUpdate: NoAction)
+  run_ra                   run_ra            @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra_risks             run_ra_risks?     @relation(fields: [run_ra_risk_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_risk_analysis {
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id                    String                         @db.Uuid
+  run_ra_risk_id               String                         @unique @db.Uuid
+  impact_score                 Decimal                        @db.Decimal(10, 2)
+  probability_score            Decimal                        @db.Decimal(10, 2)
+  inherent_risk_score          Decimal                        @db.Decimal(10, 2)
+  residual_risk_score          Decimal?                       @db.Decimal(10, 2)
+  calculation_rationale        String?
+  data_quality                 String?
+  uncertainty_level            String?
+  created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                   DateTime                       @default(now()) @db.Timestamptz(6)
+  run_ra_analysis_sensitivity  run_ra_analysis_sensitivity[]
+  run_ra_control_effectiveness run_ra_control_effectiveness[]
+  run_ra                       run_ra                         @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  run_ra_risks                 run_ra_risks                   @relation(fields: [run_ra_risk_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_risk_treatment {
+  id                      String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id_risk                 String                @db.Uuid
+  id_valoration           String                @db.Uuid
+  treatment_action        String
+  responsible_id          String?               @db.Uuid
+  due_date                DateTime?             @db.Date
+  expected_residual_score Decimal?              @db.Decimal(10, 2)
+  monitoring_required     Boolean               @default(true)
+  created_at              DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at              DateTime              @default(now()) @db.Timestamptz(6)
+  is_active               Boolean               @default(true)
+  run_ra_risks            run_ra_risks          @relation(fields: [id_risk], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_run_ra_risk_treatment_id_risk")
+  catalog_ra_valoration   catalog_ra_valoration @relation(fields: [id_valoration], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_run_ra_risk_treatment_id_valoration")
+
+  @@index([id_risk], map: "idx_run_ra_risk_treatment_id_risk")
+  @@index([id_valoration], map: "idx_run_ra_risk_treatment_id_valoration")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model run_ra_risks {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  run_ra_id                String                     @db.Uuid
+  code                     String?
+  name                     String
+  description              String?
+  cause                    String
+  event                    String
+  consequence              String
+  affected_objective       String
+  affected_stakeholder     String?
+  risk_category            String?                    @db.Uuid
+  risk_type                String?
+  risk_subtype             String?
+  owner_id                 String?                    @db.Uuid
+  created_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                   @default(now()) @db.Timestamptz(6)
+  activity_id              String?                    @db.Uuid
+  source_risk_id           String?                    @db.Uuid
+  id_valoration            String?                    @db.Uuid
+  objective_id             String?                    @db.Uuid
+  next_review_date         DateTime?                  @db.Timestamptz(6)
+  incident_register        incident_register[]
+  map_run_ra_risk_controls map_run_ra_risk_controls[]
+  run_ra_evidence          run_ra_evidence[]
+  run_ra_monitoring        run_ra_monitoring[]
+  run_ra_risk_analysis     run_ra_risk_analysis?
+  run_ra_risk_treatment    run_ra_risk_treatment[]
+  catalog_ra_valoration    catalog_ra_valoration?     @relation(fields: [id_valoration], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_run_ra_risks_id_valoration")
+  catalog_risk_category    catalog_risk_category?     @relation(fields: [risk_category], references: [id], onUpdate: NoAction, map: "fk_run_ra_risks_risk_category")
+  activities               activities?                @relation(fields: [activity_id], references: [id], onUpdate: NoAction)
+  company_objective        company_objective?         @relation(fields: [objective_id], references: [objective_id], onDelete: Restrict)
+  run_ra                   run_ra                     @relation(fields: [run_ra_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([id_valoration], map: "idx_run_ra_risks_id_valoration")
+  @@index([objective_id], map: "idx_run_ra_risks_objective_id")
+  @@index([activity_id], map: "ix_run_ra_risks_activity")
+  @@index([run_ra_id], map: "ix_run_ra_risks_run_ra")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model users {
+  id                          String                        @id(map: "security_users_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                       String                        @unique(map: "security_users_email_key") @db.VarChar(255)
+  password_hash               String
+  name                        String?                       @db.VarChar(255)
+  last_name                   String?
+  whatsapp                    String?
+  is_active                   Boolean?                      @default(true)
+  must_change_password        Boolean                       @default(true)
+  activation_status           String                        @default("pending")
+  role_id                     String?                       @db.Uuid
+  created_at                  DateTime?                     @default(now()) @db.Timestamp(6)
+  updated_at                  DateTime?                     @default(now()) @db.Timestamp(6)
+  last_login_at               DateTime?                     @db.Timestamptz(6)
+  password_updated_at         DateTime?                     @db.Timestamptz(6)
+  company_id                  String?                       @db.Uuid
+  username                    String?
+  graph_map_run_sa_activities graph_map_run_sa_activities[]
+  graph_run_lifecycle_history graph_run_lifecycle_history[]
+  graph_run_sa                graph_run_sa[]
+  map_users_x_roles           map_users_x_roles[]
+  run_ra_controls             run_ra_controls[]
+  company                     company?                      @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model users_permission {
+  code        String   @id(map: "permission_pkey")
+  module_code String
+  name        String
+  description String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model users_roles {
+  id                String              @id(map: "role_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code              String              @unique(map: "role_code_key")
+  name              String
+  description       String?
+  is_active         Boolean             @default(true)
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime            @default(now()) @db.Timestamptz(6)
+  map_users_x_roles map_users_x_roles[]
 }

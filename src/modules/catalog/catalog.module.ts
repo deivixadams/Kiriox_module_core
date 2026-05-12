@@ -1,0 +1,27 @@
+import type { KirioxModuleContract } from "@/shared/contracts/modules/module.contract";
+
+export const catalogModule: KirioxModuleContract = {
+  manifest: {
+    id: "catalog",
+    name: "Catalog",
+    version: "0.1.0",
+    description: "Módulo de catálogos de gobernanza de Kiriox.",
+    status: "active",
+    layers: ["domain", "application", "infrastructure", "api", "ui"],
+    dependencies: ["core"],
+    nav: {
+      label: "Catálogo",
+      href: "/modelo/gobernanza/catalogo",
+      icon: "BookOpen",
+      order: 70,
+    },
+  },
+
+  register() {
+    return;
+  },
+
+  activate() {
+    return;
+  },
+};

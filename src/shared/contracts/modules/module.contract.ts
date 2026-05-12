@@ -1,38 +1,51 @@
-export type KirioxModuleStatus = "active" | "disabled" | "experimental";
+export type KirioxOfficialModuleId =
+  | "core"
+  | "incident"
+  | "lineal-risk"
+  | "monitoring"
+  | "structural-risk"
+  | "simulation"
+  | "catalog"
+  | "company";
 
-export type KirioxModuleCapability =
-  | "navigation"
-  | "routes"
-  | "dashboard-widgets"
-  | "domain-services"
-  | "reports"
-  | "extension-points";
+export type KirioxModuleStatus =
+  | "active"
+  | "disabled"
+  | "experimental";
+
+export type KirioxModuleLayer =
+  | "domain"
+  | "application"
+  | "infrastructure"
+  | "api"
+  | "ui";
+
+export interface KirioxModuleNavDeclaration {
+  label: string;
+  href: string;
+  icon: string;
+  order: number;
+  permission?: string;
+}
 
 export interface KirioxModuleManifest {
-  id: string;
+  id: KirioxOfficialModuleId;
   name: string;
   version: string;
   description?: string;
   status: KirioxModuleStatus;
-  capabilities: KirioxModuleCapability[];
-  requiredPermissions?: string[];
-  dependencies?: string[];
+  layers: KirioxModuleLayer[];
+  dependencies?: KirioxOfficialModuleId[];
+  nav?: KirioxModuleNavDeclaration;
 }
 
 export interface KirioxModuleContext {
-  auth: unknown;
-  permissions: unknown;
-  eventBus: unknown;
-  audit: unknown;
-  sdk: unknown;
+  core: unknown;
 }
 
 export interface KirioxModuleContract {
   manifest: KirioxModuleManifest;
-
   register(context: KirioxModuleContext): Promise<void> | void;
-
   activate?(): Promise<void> | void;
-
   deactivate?(): Promise<void> | void;
 }

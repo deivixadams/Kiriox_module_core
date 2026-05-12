@@ -1,19 +1,25 @@
-import type { KirioxModuleContract } from "@/shared/contracts/modules/module.contract";
+import type {
+  KirioxModuleContract,
+  KirioxOfficialModuleId,
+} from "@/shared/contracts/modules/module.contract";
 
 export class KirioxModuleRegistry {
-  private readonly modules = new Map<string, KirioxModuleContract>();
+  private readonly modules = new Map<
+    KirioxOfficialModuleId,
+    KirioxModuleContract
+  >();
 
-  register(module: KirioxModuleContract): void {
-    const moduleId = module.manifest.id;
+  register(registryModule: KirioxModuleContract): void {
+    const moduleId = registryModule.manifest.id;
 
     if (this.modules.has(moduleId)) {
       throw new Error(`Module already registered: ${moduleId}`);
     }
 
-    this.modules.set(moduleId, module);
+    this.modules.set(moduleId, registryModule);
   }
 
-  get(moduleId: string): KirioxModuleContract | undefined {
+  get(moduleId: KirioxOfficialModuleId): KirioxModuleContract | undefined {
     return this.modules.get(moduleId);
   }
 
@@ -21,24 +27,14 @@ export class KirioxModuleRegistry {
     return Array.from(this.modules.values());
   }
 
-  async activate(moduleId: string): Promise<void> {
-    const module = this.modules.get(moduleId);
+  async activate(moduleId: KirioxOfficialModuleId): Promise<void> {
+    const registryModule = this.get(moduleId);
 
-    if (!module) {
+    if (!registryModule) {
       throw new Error(`Module not found: ${moduleId}`);
     }
 
-    await module.activate?.();
-  }
-
-  async deactivate(moduleId: string): Promise<void> {
-    const module = this.modules.get(moduleId);
-
-    if (!module) {
-      throw new Error(`Module not found: ${moduleId}`);
-    }
-
-    await module.deactivate?.();
+    await registryModule.activate?.();
   }
 }
 
