@@ -1,7 +1,7 @@
 export type KirioxOfficialModuleId =
   | "core"
   | "incident"
-  | "lineal-risk"
+  | "linear-risk"
   | "monitoring"
   | "structural-risk"
   | "simulation"

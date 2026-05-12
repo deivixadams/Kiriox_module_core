@@ -1,5 +1,20 @@
 
 
+# Arquitectura de desarrollo de Kiriox
+Explicación para un Experto (Orquestación, Desacoplamiento y Arquitectura Evolutiva)
+
+Para un arquitecto, Kiriox v3 es una implementación de Vertical Slicing con un Runtime Orchestrator que gestiona el ciclo de vida y la composición del sistema en tiempo de ejecución.
+
+1.  Sustitución de Liskov a Nivel de Módulo: La arquitectura se basa en la abstracción total de la funcionalidad. Mediante el `KirioxModuleContract`, el sistema interactúa con los módulos como cajas negras. Esto permite que el Core actúe como un Hipervisor de Módulos, orquestando la ejecución sin conocer jamás los detalles de implementación internos (Domain o Infrastructure).
+2.  Orquestación Basada en Metadatos (Declarative Discovery): Hemos pasado de "Configuración como Código" a "Descubrimiento como Servicio". El Registry no es solo un mapa; es el punto de entrada para una Composición Dinámica. Los hooks de `activate` y `deactivate` permiten que los módulos gestionen su propio setup (como la inicialización de micro-caches o la suscripción a eventos en el Event Bus) de manera asíncrona y aislada.
+3.  Aislamiento de Capas de Persistencia y SQL Leakage: A diferencia de las arquitecturas monolíticas tradicionales donde el ORM es un "acoplador universal", aquí el acceso a datos está estrictamente encapsulado en el Infrastructure Layer de cada módulo. El uso de `Prisma.sql` (Raw SQL) dentro de repositorios modulares permite optimizar el rendimiento (especialmente en agregaciones complejas para dashboards) sin que las reglas de SQL o esquemas específicos "sangren" hacia las capas superiores o hacia otros módulos.
+4.  Capa de Composición en Tiempo de Ejecución (Context-Aware UI): El `AccessContextRepository` junto con `buildNavigation` funcionan como una capa de Feature Toggling Multi-Tenant. La interfaz de usuario no es estática; se "deriva" del estado del Registry y del contexto de acceso del usuario. Esto permite una arquitectura multi-inquilino donde la funcionalidad puede variar drásticamente entre empresas simplemente activando o desactivando registros en el manifest, sin despliegues adicionales.
+5.  Agnosticismo de la Capa de Entrega (Delivery Agnostic): Al separar los `handlers` y las `pages` de las rutas de Next.js, hemos creado una arquitectura lista para Micro-Frontends. Podríamos migrar a Module Federation o cambiar el framework de rutas por completo, y el 100% de la lógica de negocio y dominio permanecería intacta, ya que el framework (Next.js) es tratado simplemente como un detalle de implementación de la capa de entrega.
+
+Conclusión: Kiriox v3 es una arquitectura evolutiva que combina la simplicidad de desarrollo de un monolito con la flexibilidad y el aislamiento de los microservicios. Es un sistema de Autogestión de Capacidades donde el Core proporciona los servicios de bajo nivel (seguridad, persistencia, auditoría) y los módulos proporcionan la inteligencia de negocio de manera autónoma y autocontenida.
+
+
+
 
 Tablas para la parte estructura. Si notas que alguna ha cambiado actualizar.
 
