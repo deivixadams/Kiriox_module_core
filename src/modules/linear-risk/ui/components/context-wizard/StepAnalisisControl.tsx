@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { AlertCircle, BarChart3, BriefcaseBusiness, Calendar, Cpu, FileText, Info, Loader2, Save, ShieldCheck, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertCircle, BarChart3, BriefcaseBusiness, Calendar, Cpu, FileText, Info, Loader2, Plus, Save, ShieldCheck, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CARD, INPUT_S, LoaderSection, ErrorAlert } from './ContextWizardShared';
 
 export function StepAnalisisControl({ runRaId }: { runRaId: string }) {

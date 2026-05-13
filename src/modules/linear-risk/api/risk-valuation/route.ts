@@ -1,10 +1,10 @@
-import { withAccess } from "@/shared/http/withAccess";
-import { ok } from "@/shared/http";
+import { withAccess } from "@/core/permissions/http/withAccess";
+import { ok } from "@/shared/utils/http-responses";
 import { PrismaLinearRiskRepository } from "../../infrastructure/repositories/PrismaLinearRiskRepository";
 
 const repo = new PrismaLinearRiskRepository();
 
-export const GET = withAccess(async (request, access) => {
+export const GET = withAccess({ module: 'linear-risk', permission: 'read' }, async (request, context, access) => {
   const { searchParams } = new URL(request.url);
   const runRaId = searchParams.get('runRaId');
 
@@ -14,7 +14,7 @@ export const GET = withAccess(async (request, access) => {
   return ok(data);
 });
 
-export const POST = withAccess(async (request) => {
+export const POST = withAccess({ module: 'linear-risk', permission: 'read' }, async (request) => {
   const body = await request.json();
   const { runRaId, riskId, valorationId } = body;
 

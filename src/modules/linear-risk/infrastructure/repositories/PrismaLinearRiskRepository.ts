@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@/generated/prisma/client";
 import prisma from "@/infrastructure/db/prisma/client";
 import {
   LinearRiskRepository,
@@ -26,6 +26,7 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
     elementId?: string,
     activityId?: string
   ): Promise<LinearRiskEvaluationsSummary> {
+    console.log('[PrismaLinearRiskRepository] fetching evals for companyId:', companyId);
     const rows = await prisma.$queryRaw<any[]>(Prisma.sql`
       SELECT
         r.id::text,
@@ -90,6 +91,8 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
       ${activityId ? Prisma.sql`AND r.id IN (SELECT ce4.run_ra_id FROM public.run_ra_contexto_evaluacion ce4 WHERE ce4.activity_id = ${activityId}::uuid)` : Prisma.empty}
       ORDER BY r.created_at DESC
     `);
+
+    console.log('[PrismaLinearRiskRepository] rows found:', rows.length);
 
     const evaluations: LinearRiskEvaluation[] = rows.map((r) => {
       const contextCount = Number(r.context_count);

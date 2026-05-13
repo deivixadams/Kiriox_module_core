@@ -1,10 +1,10 @@
-import { withAccess } from "@/shared/http/withAccess";
-import { ok, created } from "@/shared/http";
+import { withAccess } from "@/core/permissions/http/withAccess";
+import { ok, created } from "@/shared/utils/http-responses";
 import { PrismaLinearRiskRepository } from "../../infrastructure/repositories/PrismaLinearRiskRepository";
 
 const repository = new PrismaLinearRiskRepository();
 
-export const GET = withAccess(async (req, access) => {
+export const GET = withAccess({ module: 'linear-risk', permission: 'read' }, async (req, context, access) => {
   const url = new URL(req.url);
   const runRaId = url.searchParams.get("runRaId");
   if (!runRaId) return new Response("runRaId is required", { status: 400 });
@@ -12,7 +12,7 @@ export const GET = withAccess(async (req, access) => {
   const data = await repository.getGeneralContext(runRaId, access.company.id);
   
   // Map internal database fields to the frontend expected field names
-  const context = data.context ? {
+  const mappedContext = data.context ? {
     objetivo: data.context.objective,
     alcance: data.context.scope,
     objeto_evaluado: data.context.object_type ?? "",
@@ -30,14 +30,14 @@ export const GET = withAccess(async (req, access) => {
   } : null;
 
   return ok({ 
-    context, 
+    context: mappedContext, 
     appetiteCatalog: data.appetiteCatalog, 
     elements: data.elements, 
     activities: data.activities 
   });
 });
 
-export const POST = withAccess(async (req) => {
+export const POST = withAccess({ module: 'linear-risk', permission: 'read' }, async (req) => {
   const body = await req.json();
   
   await repository.upsertGeneralContext({

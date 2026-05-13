@@ -1,12 +1,11 @@
-import { withAccess } from "@/shared/http/withAccess";
-import { ok } from "@/shared/http";
+import { withAccess } from "@/core/permissions/http/withAccess";
 import { PrismaLinearRiskRepository } from "../../infrastructure/repositories/PrismaLinearRiskRepository";
 import { GetLinearRiskEvaluationsUseCase } from "../../application/use-cases/GetLinearRiskEvaluationsUseCase";
 
 const repository = new PrismaLinearRiskRepository();
 const getEvaluationsUseCase = new GetLinearRiskEvaluationsUseCase(repository);
 
-export const GET = withAccess(async (request, access) => {
+export const GET = withAccess({ module: 'linear-risk', permission: 'read' }, async (request, context, access) => {
   const { searchParams } = new URL(request.url);
   const elementId = searchParams.get("elementId") || undefined;
   const activityId = searchParams.get("activityId") || undefined;
@@ -17,5 +16,8 @@ export const GET = withAccess(async (request, access) => {
     activityId
   );
 
-  return ok(result);
+  console.log('[LinearRiskEvaluations] companyId:', access.company.id);
+  console.log('[LinearRiskEvaluations] evaluations count:', result.evaluations.length);
+
+  return Response.json(result);
 });

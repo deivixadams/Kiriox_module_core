@@ -1,5 +1,5 @@
-import { withAccess } from "@/shared/http/withAccess";
-import { ok, created } from "@/shared/http";
+import { withAccess } from "@/core/permissions/http/withAccess";
+import { ok, created } from "@/shared/utils/http-responses";
 import { PrismaLinearRiskRepository } from "../../infrastructure/repositories/PrismaLinearRiskRepository";
 
 const repository = new PrismaLinearRiskRepository();
@@ -7,7 +7,7 @@ const repository = new PrismaLinearRiskRepository();
 const EXTERNAL_CATEGORIES = ['regulacion', 'mercado', 'economia', 'competencia'] as const;
 const INTERNAL_CATEGORIES = ['recursos', 'capacidades', 'procesos', 'sistemas', 'personas_clave'] as const;
 
-export const GET = withAccess(async (req) => {
+export const GET = withAccess({ module: 'linear-risk', permission: 'read' }, async (req) => {
   const url = new URL(req.url);
   const runRaId = url.searchParams.get("runRaId");
   const type = url.searchParams.get("type") || "INTERNAL";
@@ -24,7 +24,7 @@ export const GET = withAccess(async (req) => {
   return ok({ context });
 });
 
-export const POST = withAccess(async (req) => {
+export const POST = withAccess({ module: 'linear-risk', permission: 'read' }, async (req) => {
   const body = await req.json();
   const { runRaId, type } = body;
 
