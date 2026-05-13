@@ -9,7 +9,9 @@ export type ModuleCode =
   | 'alerts'
   | 'simulation'
   | 'catalog'
-  | 'company';
+  | 'company'
+  | 'monitoring'
+  | 'hechos-relevantes';
 
 export type AccessRequirement = {
   module: ModuleCode;

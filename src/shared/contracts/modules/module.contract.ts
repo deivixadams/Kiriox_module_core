@@ -3,6 +3,7 @@ export type KirioxOfficialModuleId =
   | "incident"
   | "linear-risk"
   | "monitoring"
+  | "hechos-relevantes"
   | "structural-risk"
   | "simulation"
   | "catalog"
