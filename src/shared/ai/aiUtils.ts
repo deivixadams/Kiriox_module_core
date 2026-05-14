@@ -6,8 +6,16 @@ import type { KirioxOfficialModuleId } from '@/shared/contracts/modules/module.c
 export function cleanAiText(raw: string): string {
   return raw
     .trim()
+    // strip markdown bold/italic: **text** → text, *text* → text, __text__ → text
+    .replace(/\*{1,3}([^*]*)\*{1,3}/g, '$1')
+    // strip markdown headings: ## Título → Título
+    .replace(/^#{1,6}\s+/gm, '')
+    // strip remaining lone * or # symbols
+    .replace(/[*#]/g, '')
+    // strip leading quote or dash
     .replace(/^["']|["']$/g, '')
     .replace(/^\s*[-–—]\s*/, '')
+    // collapse whitespace
     .replace(/\s+/g, ' ')
     .trim();
 }

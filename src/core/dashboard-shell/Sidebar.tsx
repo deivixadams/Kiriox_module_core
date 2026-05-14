@@ -181,10 +181,10 @@ export default function Sidebar({ items, loading = false }: SidebarProps) {
         <div style={{ display: "flex", alignItems: "center" }}>
           {collapsed ? (
             <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "var(--primary-glow)", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              <Image src="/logo.svg" alt="Logo" width={28} height={28} style={{ objectFit: "contain" }} />
+              <Image src="/logo.svg" alt="Logo" width={28} height={28} style={{ objectFit: "contain", height: "auto" }} />
             </div>
           ) : (
-            <Image src="/logo.svg" alt="Logo" width={180} height={44} style={{ objectFit: "contain", maxWidth: "180px", height: "44px" }} />
+            <Image src="/logo.svg" alt="Logo" width={180} height={44} style={{ objectFit: "contain", maxWidth: "180px", height: "auto" }} />
           )}
         </div>
       </div>

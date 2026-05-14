@@ -41,6 +41,16 @@ export function StepTratamiento({ runRaId }: { runRaId: string }) {
 
   const owners = data.catalogs?.owners ?? [];
 
+  async function readJsonSafe<T>(res: Response): Promise<T | null> {
+    const text = await res.text();
+    if (!text.trim()) return null;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return null;
+    }
+  }
+
   async function loadRisks() {
     setLoading(true);
     setError(null);
@@ -65,7 +75,8 @@ export function StepTratamiento({ runRaId }: { runRaId: string }) {
         `/api/linear-risk/risk-treatment?runRaId=${encodeURIComponent(runRaId)}&riskId=${encodeURIComponent(riskId)}`,
         { credentials: 'include', cache: 'no-store' }
       );
-      const body = await res.json() as { actions: Array<{ id: string; treatment_action: string; responsible_id: string | null; responsible_name: string | null; target_date: string | null; requires_reevaluation: boolean; status: string }>; error?: string };
+      const body = await readJsonSafe<{ actions: Array<{ id: string; treatment_action: string; responsible_id: string | null; responsible_name: string | null; target_date: string | null; requires_reevaluation: boolean; status: string }>; error?: string }>(res);
+      if (!body) return;
       if (!res.ok) return;
       const mapped: TreatmentActionRow[] = body.actions.map((a) => ({
         id: a.id,
@@ -139,8 +150,8 @@ export function StepTratamiento({ runRaId }: { runRaId: string }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ runRaId, riskId, action: '', responsible_id: null, due_date: null, monitored: false, status: 'Pendiente' }),
       });
-      const body = await res.json() as { ok: boolean; id: string; error?: string };
-      if (!res.ok || !body.id) throw new Error(extractError(body, 'Error al crear acción'));
+      const body = await readJsonSafe<{ ok: boolean; id: string; error?: string }>(res);
+      if (!res.ok || !body?.id) throw new Error(extractError(body ?? {}, 'Error al crear acción'));
       const newRow: TreatmentActionRow = { id: body.id, action: '', responsible_id: '', due_date: '', monitored: false, status: 'Pendiente' };
       setActionsByRisk((prev) => ({ ...prev, [riskId]: [...(prev[riskId] ?? []), newRow] }));
     } catch (e: unknown) {

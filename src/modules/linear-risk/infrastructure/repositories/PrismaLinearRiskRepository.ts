@@ -8,6 +8,122 @@ import {
 } from "../../domain/types";
 
 export class PrismaLinearRiskRepository implements LinearRiskRepository {
+  private riskAppetiteCatalogExists: boolean | null = null;
+
+  private resolveRiskLevel(
+    score: number | null,
+    levels: Array<{ code: string; name: string; min_score: number; max_score: number; color: string | null }>
+  ) {
+    if (score == null) return null;
+    return levels.find((level) => score >= Number(level.min_score) && score <= Number(level.max_score)) ?? null;
+  }
+
+  private async hasRiskAppetiteCatalog(): Promise<boolean> {
+    if (this.riskAppetiteCatalogExists != null) return this.riskAppetiteCatalogExists;
+
+    const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>(Prisma.sql`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'risk_appetite_catalog'
+      ) AS exists
+    `);
+
+    this.riskAppetiteCatalogExists = Boolean(rows[0]?.exists);
+    return this.riskAppetiteCatalogExists;
+  }
+
+  private async getUnifiedAppetiteCatalog(): Promise<Array<{ appetite_level: string; tolerance_min: number | null; tolerance_max: number | null }>> {
+    const hasRiskAppetiteCatalog = await this.hasRiskAppetiteCatalog();
+
+    const [catalogAppetite, riskAppetiteCatalog] = await Promise.all([
+      prisma.$queryRaw<Array<{ appetite_level: string; tolerance_min: number | null; tolerance_max: number | null }>>(Prisma.sql`
+        SELECT appetite_level, tolerance_min::float8, tolerance_max::float8
+        FROM public.catalog_appetite
+        WHERE upper(coalesce(is_active::text, '')) IN ('ACTIVE', 'TRUE', '1', 'YES')
+        ORDER BY tolerance_min ASC, appetite_level ASC
+      `).catch(() => []),
+      hasRiskAppetiteCatalog
+        ? prisma.$queryRaw<Array<{ appetite_level: string | null; min_score: number | null; max_score: number | null }>>(Prisma.sql`
+            SELECT appetite_level, min_score::float8, max_score::float8
+            FROM public.risk_appetite_catalog
+            WHERE is_active = true
+            ORDER BY sequence_order NULLS LAST, appetite_level NULLS LAST
+          `).catch(() => [])
+        : Promise.resolve([]),
+    ]);
+
+    const merged = new Map<string, { appetite_level: string; tolerance_min: number | null; tolerance_max: number | null }>();
+
+    for (const row of catalogAppetite) {
+      const key = String(row.appetite_level ?? '').trim().toLowerCase();
+      if (!key) continue;
+      merged.set(key, {
+        appetite_level: String(row.appetite_level),
+        tolerance_min: row.tolerance_min ?? null,
+        tolerance_max: row.tolerance_max ?? null,
+      });
+    }
+
+    for (const row of riskAppetiteCatalog) {
+      const key = String(row.appetite_level ?? '').trim().toLowerCase();
+      if (!key || merged.has(key)) continue;
+      merged.set(key, {
+        appetite_level: String(row.appetite_level),
+        tolerance_min: row.min_score ?? null,
+        tolerance_max: row.max_score ?? null,
+      });
+    }
+
+    return [...merged.values()].sort((a, b) => Number(a.tolerance_min ?? 0) - Number(b.tolerance_min ?? 0));
+  }
+
+  private async resolveAppetiteByValue(appetiteValue: string): Promise<{ appetite_level: string; tolerance_min: number | null; tolerance_max: number | null } | null> {
+    if (!appetiteValue.trim()) return null;
+
+    const hasRiskAppetiteCatalog = await this.hasRiskAppetiteCatalog();
+
+    const [catalogMatch, riskCatalogMatch] = await Promise.all([
+      prisma.$queryRaw<Array<{ appetite_level: string; tolerance_min: number | null; tolerance_max: number | null }>>(Prisma.sql`
+        SELECT appetite_level, tolerance_min::float8, tolerance_max::float8
+        FROM public.catalog_appetite
+        WHERE lower(replace(appetite_level, ' ', '_')) = lower(${appetiteValue})
+           OR lower(appetite_level) = lower(${appetiteValue})
+        ORDER BY effective_from DESC NULLS LAST, created_at DESC
+        LIMIT 1
+      `).catch(() => []),
+      hasRiskAppetiteCatalog
+        ? prisma.$queryRaw<Array<{ appetite_level: string | null; min_score: number | null; max_score: number | null }>>(Prisma.sql`
+            SELECT appetite_level, min_score::float8, max_score::float8
+            FROM public.risk_appetite_catalog
+            WHERE lower(replace(appetite_level, ' ', '_')) = lower(${appetiteValue})
+               OR lower(appetite_level) = lower(${appetiteValue})
+            ORDER BY sequence_order NULLS LAST, appetite_level NULLS LAST
+            LIMIT 1
+          `).catch(() => [])
+        : Promise.resolve([]),
+    ]);
+
+    if (catalogMatch[0]) {
+      return {
+        appetite_level: catalogMatch[0].appetite_level,
+        tolerance_min: catalogMatch[0].tolerance_min ?? null,
+        tolerance_max: catalogMatch[0].tolerance_max ?? null,
+      };
+    }
+
+    if (riskCatalogMatch[0]?.appetite_level) {
+      return {
+        appetite_level: String(riskCatalogMatch[0].appetite_level),
+        tolerance_min: riskCatalogMatch[0].min_score ?? null,
+        tolerance_max: riskCatalogMatch[0].max_score ?? null,
+      };
+    }
+
+    return null;
+  }
+
   async getDashboardRows(): Promise<LinearRiskDashboardSummary> {
     const rows = await prisma.$queryRaw<any[]>(Prisma.sql`
       SELECT * FROM views.dashboard_top_control
@@ -123,6 +239,7 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
       } else if (lifecycleCode === "COMPLETED") {
         statusLabel = "COMPLETADA";
         statusColor = "#a78bfa";
+        progress = 100;
       } else if (lifecycleCode === "CANCELLED") {
         statusLabel = "CANCELADA";
         statusColor = "#f43f5e";
@@ -245,12 +362,7 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
     `);
     const row = rows[0] ?? null;
 
-    const appetiteCatalog = await prisma.$queryRaw<any[]>(Prisma.sql`
-      SELECT appetite_level, tolerance_min::float8, tolerance_max::float8
-      FROM public.catalog_appetite
-      WHERE is_active = 'ACTIVE'
-      ORDER BY tolerance_min ASC
-    `);
+    const appetiteCatalog = await this.getUnifiedAppetiteCatalog();
 
     const [elements, activities] = await Promise.all([
       prisma.$queryRaw<any[]>(Prisma.sql`
@@ -477,16 +589,7 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
     }
 
     const appetiteValue = String(runRaMeta[0]?.risk_appetite ?? '').trim();
-    const appetiteRows = appetiteValue
-      ? await prisma.$queryRaw<any[]>(Prisma.sql`
-          SELECT appetite_level, tolerance_min::float8, tolerance_max::float8
-          FROM public.catalog_appetite
-          WHERE lower(replace(appetite_level, ' ', '_')) = lower(${appetiteValue})
-             OR lower(appetite_level) = lower(${appetiteValue})
-          ORDER BY effective_from DESC NULLS LAST, created_at DESC
-          LIMIT 1
-        `)
-      : [];
+    const appetiteRow = await this.resolveAppetiteByValue(appetiteValue);
 
     return {
       items: items.map((i) => ({ ...i, control_ids: controlsByRisk.get(i.id) ?? [] })),
@@ -496,9 +599,9 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
         evaluated_process: runRaMeta[0]?.element_name || runRaMeta[0]?.scope || '',
         evaluated_activity: runRaMeta[0]?.activity_name || '',
         responsible_person: runRaMeta[0]?.description || '',
-        risk_appetite: appetiteRows[0]?.appetite_level || appetiteValue,
-        appetite_tolerance_min: appetiteRows[0]?.tolerance_min ?? null,
-        appetite_tolerance_max: appetiteRows[0]?.tolerance_max ?? null,
+        risk_appetite: appetiteRow?.appetite_level || appetiteValue,
+        appetite_tolerance_min: appetiteRow?.tolerance_min ?? null,
+        appetite_tolerance_max: appetiteRow?.tolerance_max ?? null,
       },
       catalogs: {
         impacts,
@@ -769,71 +872,205 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
   // --- STEP 4: RISK VALUATION ---
 
   async getRiskValuationData(runRaId: string, companyId: string) {
-    const [risks, catalogs] = await Promise.all([
+    const [risksRaw, controlsDirect, controlsMapped, levels, metaRows, valorationCatalog, ownersRaw] = await Promise.all([
       prisma.$queryRaw<any[]>(Prisma.sql`
         SELECT
           r.id::text,
-          r.name AS risk,
+          COALESCE(r.code, '') AS code,
+          COALESCE(NULLIF(trim(r.name), ''), NULLIF(trim(r.event), ''), NULLIF(trim(r.cause), ''), 'Riesgo sin título') AS risk,
           r.cause,
-          cat.name AS risk_category,
-          a.inherent_risk_score::float8 AS inherent_score,
-          a.residual_risk_score::float8 AS residual_score,
-          r.id_valoration::text,
-          ilev.name AS inherent_level,
-          ilev.color AS inherent_level_color,
-          rlev.name AS residual_level,
-          rlev.color AS residual_level_color
+          r.event,
+          r.activity_id::text,
+          a.name AS activity,
+          r.id_valoration::text AS id_valoration,
+          ra.inherent_risk_score::float8 AS inherent_score,
+          ra.residual_risk_score::float8 AS residual_score,
+          ra.calculation_rationale
         FROM public.run_ra_risks r
-        LEFT JOIN public.run_ra_risk_analysis a ON a.run_ra_risk_id = r.id
-        LEFT JOIN public.catalog_risk_category cat ON cat.id = r.risk_category
-        LEFT JOIN public.catalog_risk_level ilev
-             ON a.inherent_risk_score >= ilev.min_score AND a.inherent_risk_score <= ilev.max_score AND ilev.is_active = true
-        LEFT JOIN public.catalog_risk_level rlev
-             ON a.residual_risk_score >= rlev.min_score AND a.residual_risk_score <= rlev.max_score AND rlev.is_active = true
+        LEFT JOIN public.run_ra_risk_analysis ra ON ra.run_ra_risk_id = r.id
+        LEFT JOIN public.activities a ON a.id = r.activity_id
         WHERE r.run_ra_id = ${runRaId}::uuid
-        ORDER BY r.created_at ASC
+        ORDER BY r.updated_at DESC NULLS LAST, r.created_at ASC
       `),
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, decision AS label, decision AS code FROM public.catalog_ra_valoration WHERE is_active = true ORDER BY decision ASC`),
-    ]);
-
-    // For each risk, fetch its controls
-    const riskDetails = await Promise.all(risks.map(async (r) => {
-      const controls = await prisma.$queryRaw<any[]>(Prisma.sql`
-        SELECT c.id::text, c.name
+      prisma.$queryRaw<any[]>(Prisma.sql`
+        SELECT
+          c.id::text AS control_id,
+          c.id_risk::text AS risk_id,
+          COALESCE(c.name, 'Control sin nombre') AS name,
+          c.design::float8,
+          c.implementation::float8,
+          c.operation::float8,
+          c.cobertura::float8
+        FROM public.run_ra_controls c
+        WHERE c.run_ra_id = ${runRaId}::uuid
+          AND c.is_active = true
+          AND c.id_risk IS NOT NULL
+      `),
+      prisma.$queryRaw<any[]>(Prisma.sql`
+        SELECT
+          c.id::text AS control_id,
+          m.run_ra_risk_id::text AS risk_id,
+          COALESCE(c.name, 'Control sin nombre') AS name,
+          c.design::float8,
+          c.implementation::float8,
+          c.operation::float8,
+          c.cobertura::float8
         FROM public.map_run_ra_risk_controls m
         JOIN public.run_ra_controls c ON c.id = m.run_ra_control_id
-        WHERE m.run_ra_risk_id = ${r.id}::uuid
-      `);
-      
-      const reduction_score = r.inherent_score - r.residual_score;
-      const reduction_percent = r.inherent_score > 0 ? (reduction_score / r.inherent_score) * 100 : 0;
+        WHERE c.run_ra_id = ${runRaId}::uuid
+          AND c.is_active = true
+      `).catch(() => []),
+      prisma.$queryRaw<Array<{ code: string; name: string; min_score: number; max_score: number; color: string | null }>>(Prisma.sql`
+        SELECT code, name, min_score::int, max_score::int, color
+        FROM public.catalog_risk_level
+        WHERE is_active = true
+        ORDER BY sort_order ASC NULLS LAST, min_score ASC
+      `),
+      prisma.$queryRaw<any[]>(Prisma.sql`
+        SELECT
+          rr.id::text,
+          rr.code,
+          rr.object_type,
+          ce.scope,
+          ce.risk_appetite
+        FROM public.run_ra rr
+        LEFT JOIN public.run_ra_contexto_evaluacion ce ON ce.run_ra_id = rr.id
+        WHERE rr.id = ${runRaId}::uuid
+          AND rr.company_id = ${companyId}::uuid
+        ORDER BY ce.updated_at DESC NULLS LAST
+        LIMIT 1
+      `),
+      prisma.$queryRaw<any[]>(Prisma.sql`
+        SELECT id::text, COALESCE(decision, id::text) AS label
+        FROM public.catalog_ra_valoration
+        WHERE is_active = true
+        ORDER BY label ASC
+      `),
+      prisma.$queryRaw<any[]>(Prisma.sql`
+        SELECT id::text, COALESCE(name, '') AS name, COALESCE(last_name, '') AS last_name
+        FROM public.users
+        WHERE company_id = ${companyId}::uuid
+          AND is_active = true
+        ORDER BY name ASC, last_name ASC
+      `),
+    ]);
+
+    const controlsByRisk = new Map<string, Array<{
+      id: string;
+      name: string;
+      design: number | null;
+      implementation: number | null;
+      operation: number | null;
+      cobertura: number | null;
+    }>>();
+
+    for (const raw of [...controlsDirect, ...controlsMapped]) {
+      const riskId = String(raw.risk_id ?? '').trim();
+      const controlId = String(raw.control_id ?? '').trim();
+      if (!riskId || !controlId) continue;
+      const existing = controlsByRisk.get(riskId) ?? [];
+      if (existing.some((c) => c.id === controlId)) continue;
+      existing.push({
+        id: controlId,
+        name: String(raw.name ?? 'Control sin nombre'),
+        design: raw.design ?? null,
+        implementation: raw.implementation ?? null,
+        operation: raw.operation ?? null,
+        cobertura: raw.cobertura ?? null,
+      });
+      controlsByRisk.set(riskId, existing);
+    }
+
+    const risks = risksRaw.map((riskRow) => {
+      const controls = controlsByRisk.get(String(riskRow.id)) ?? [];
+      const inherent = Number(riskRow.inherent_score ?? 0);
+
+      let residual = Number(riskRow.residual_score ?? 0);
+      if (!Number.isFinite(residual)) residual = 0;
+
+      if (residual === 0 && controls.length > 0 && inherent > 0) {
+        let reduction = 0;
+        for (const control of controls) {
+          const internalEff =
+            (Number(control.design ?? 3) / 5) * 0.35 +
+            (Number(control.implementation ?? 3) / 5) * 0.30 +
+            (Number(control.operation ?? 3) / 5) * 0.35;
+          const coverage = Number(control.cobertura ?? 75) / 100;
+          reduction += inherent * (internalEff * coverage);
+        }
+        reduction = Math.min(reduction, inherent);
+        residual = Math.max(0, inherent - reduction);
+      }
+
+      const reductionScore = Math.max(0, inherent - residual);
+      const reductionPercent = inherent > 0 ? (reductionScore / inherent) * 100 : 0;
+      const inherentLevel = this.resolveRiskLevel(inherent, levels);
+      const residualLevel = this.resolveRiskLevel(residual, levels);
+      let rationale: Record<string, unknown> = {};
+      if (typeof riskRow.calculation_rationale === 'string') {
+        try {
+          rationale = JSON.parse(riskRow.calculation_rationale || '{}') as Record<string, unknown>;
+        } catch {
+          rationale = {};
+        }
+      } else if (riskRow.calculation_rationale && typeof riskRow.calculation_rationale === 'object') {
+        rationale = riskRow.calculation_rationale as Record<string, unknown>;
+      }
 
       return {
-        ...r,
-        controls,
-        reduction_score,
-        reduction_percent,
+        id: String(riskRow.id),
+        code: String(riskRow.code ?? ''),
+        risk: String(riskRow.risk ?? 'Riesgo sin título'),
+        cause: riskRow.cause ?? null,
+        activity: riskRow.activity ?? null,
+        controls: controls.map((control) => ({ id: control.id, name: control.name })),
+        reduction_score: Number(reductionScore.toFixed(2)),
+        reduction_percent: Number(reductionPercent.toFixed(1)),
+        residual_score: Number(residual.toFixed(2)),
+        residual_level: residualLevel?.name ?? null,
+        residual_level_color: residualLevel?.color ?? null,
+        inherent_score: Number(inherent.toFixed(2)),
+        inherent_level: inherentLevel?.name ?? null,
+        inherent_level_color: inherentLevel?.color ?? null,
+        weight: Number(rationale?.peso_value ?? 0) || 0,
+        id_valoration: riskRow.id_valoration ?? null,
       };
-    }));
+    });
 
-    const total_inherent = riskDetails.reduce((acc, r) => acc + r.inherent_score, 0);
-    const total_residual = riskDetails.reduce((acc, r) => acc + r.residual_score, 0);
-    const total_reduction = total_inherent - total_residual;
-    const total_reduction_percent = total_inherent > 0 ? (total_reduction / total_inherent) * 100 : 0;
+    const total_inherent = Number(risks.reduce((acc, r) => acc + Number(r.inherent_score || 0), 0).toFixed(2));
+    const total_residual = Number(risks.reduce((acc, r) => acc + Number(r.residual_score || 0), 0).toFixed(2));
+    const total_reduction = Number((total_inherent - total_residual).toFixed(2));
+    const total_reduction_percent = total_inherent > 0 ? Number(((total_reduction / total_inherent) * 100).toFixed(1)) : 0;
+
+    const appetiteValue = String(metaRows[0]?.risk_appetite ?? '').trim();
+    const appetiteRow = await this.resolveAppetiteByValue(appetiteValue);
 
     return {
+      meta: {
+        run_ra_code: metaRows[0]?.code ?? '',
+        evaluated_process: metaRows[0]?.object_type || metaRows[0]?.scope || '',
+        risk_appetite: appetiteRow?.appetite_level || appetiteValue,
+        appetite_tolerance_min: appetiteRow?.tolerance_min ?? null,
+        appetite_tolerance_max: appetiteRow?.tolerance_max ?? null,
+      },
       summary: { total_inherent, total_residual, total_reduction, total_reduction_percent },
-      risks: riskDetails,
-      catalogs: { valoration: catalogs }
+      risks,
+      catalogs: {
+        valoration: valorationCatalog,
+        owners: ownersRaw.map((owner: { id: string; name: string; last_name: string }) => ({
+          id: owner.id,
+          name: `${owner.name} ${owner.last_name}`.trim(),
+        })),
+      },
     };
   }
 
   async updateRiskValuation(runRaId: string, riskId: string, valorationId: string | null) {
     await prisma.$executeRaw(Prisma.sql`
-      UPDATE public.run_ra_risk_analysis
+      UPDATE public.run_ra_risks
       SET id_valoration = ${valorationId}::uuid,
           updated_at = now()
-      WHERE run_ra_id = ${runRaId}::uuid AND run_ra_risk_id = ${riskId}::uuid
+      WHERE run_ra_id = ${runRaId}::uuid AND id = ${riskId}::uuid
     `);
   }
 
@@ -845,37 +1082,69 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
         id::text,
         treatment_action,
         responsible_id::text,
-        target_date::text AS target_date,
-        requires_reevaluation AS monitored,
-        status
+        due_date::text AS target_date,
+        monitoring_required AS requires_reevaluation,
+        COALESCE(id_valoration::text, 'Pendiente') AS status
       FROM public.run_ra_risk_treatment
-      WHERE run_ra_id = ${runRaId}::uuid AND run_ra_risk_id = ${riskId}::uuid
+      WHERE id_risk = ${riskId}::uuid
+        AND is_active = true
+        AND EXISTS (
+          SELECT 1
+          FROM public.run_ra_risks r
+          WHERE r.id = ${riskId}::uuid
+            AND r.run_ra_id = ${runRaId}::uuid
+        )
       ORDER BY created_at ASC
     `);
   }
 
   async upsertRiskTreatmentAction(runRaId: string, riskId: string, actionData: any) {
     const { id, action, responsible_id, due_date, monitored, status } = actionData;
+    const validRisk = await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT id::text
+      FROM public.run_ra_risks
+      WHERE id = ${riskId}::uuid
+        AND run_ra_id = ${runRaId}::uuid
+      LIMIT 1
+    `);
+    if (!validRisk[0]) throw new Error('Riesgo inválido para esta evaluación.');
+
+    const resolvedValorationId =
+      typeof status === 'string' && status && status !== 'Pendiente' && /^[0-9a-f-]{36}$/i.test(status)
+        ? status
+        : null;
+
+    const fallbackValoration = resolvedValorationId
+      ? null
+      : await prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT id::text
+          FROM public.catalog_ra_valoration
+          ORDER BY id ASC
+          LIMIT 1
+        `);
+    const finalValorationId = resolvedValorationId ?? fallbackValoration?.[0]?.id ?? null;
+    if (!finalValorationId) throw new Error('No hay opciones de valoración configuradas.');
 
     if (id) {
       await prisma.$executeRaw(Prisma.sql`
         UPDATE public.run_ra_risk_treatment
         SET treatment_action = ${action},
             responsible_id = ${responsible_id || null}::uuid,
-            target_date = ${due_date || null}::date,
-            requires_reevaluation = ${monitored},
-            status = ${status},
+            due_date = ${due_date || null}::date,
+            monitoring_required = ${monitored},
+            id_valoration = ${finalValorationId}::uuid,
             updated_at = now()
         WHERE id = ${id}::uuid
+          AND id_risk = ${riskId}::uuid
       `);
       return id;
     } else {
       const rows = await prisma.$queryRaw<any[]>(Prisma.sql`
         INSERT INTO public.run_ra_risk_treatment (
-          id, run_ra_id, run_ra_risk_id, treatment_action, responsible_id, target_date, requires_reevaluation, status, created_at, updated_at
+          id, id_risk, id_valoration, treatment_action, responsible_id, due_date, monitoring_required, is_active, created_at, updated_at
         ) VALUES (
-          gen_random_uuid(), ${runRaId}::uuid, ${riskId}::uuid, ${action}, ${responsible_id || null}::uuid, 
-          ${due_date || null}::date, ${monitored}, ${status}, now(), now()
+          gen_random_uuid(), ${riskId}::uuid, ${finalValorationId}::uuid, ${action}, ${responsible_id || null}::uuid,
+          ${due_date || null}::date, ${monitored}, true, now(), now()
         ) RETURNING id::text
       `);
       return rows[0].id;
@@ -884,8 +1153,11 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
 
   async deleteRiskTreatmentAction(runRaId: string, id: string) {
     await prisma.$executeRaw(Prisma.sql`
-      DELETE FROM public.run_ra_risk_treatment
-      WHERE id = ${id}::uuid AND run_ra_id = ${runRaId}::uuid
+      DELETE FROM public.run_ra_risk_treatment t
+      USING public.run_ra_risks r
+      WHERE t.id = ${id}::uuid
+        AND r.id = t.id_risk
+        AND r.run_ra_id = ${runRaId}::uuid
     `);
   }
 

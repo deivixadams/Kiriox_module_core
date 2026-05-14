@@ -43,15 +43,16 @@ export type TreatmentActionRow = {
 };
 
 export function StepValoracion({ runRaId }: { runRaId: string }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showHeatMap, setShowHeatMap] = useState(false);
-  const [data, setData] = useState<ValuationData>({
+  const emptyData: ValuationData = {
     meta: { run_ra_code: '', evaluated_process: '', risk_appetite: '', appetite_tolerance_min: null, appetite_tolerance_max: null },
     summary: { total_inherent: 0, total_residual: 0, total_reduction: 0, total_reduction_percent: 0 },
     risks: [],
     catalogs: { valoration: [] },
-  });
+  };
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showHeatMap, setShowHeatMap] = useState(false);
+  const [data, setData] = useState<ValuationData>(emptyData);
   const [savingDecisionByRisk, setSavingDecisionByRisk] = useState<Record<string, boolean>>({});
   const [autoSaveState, setAutoSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
@@ -65,7 +66,24 @@ export function StepValoracion({ runRaId }: { runRaId: string }) {
       });
       const body = await res.json() as ValuationData & { error?: string };
       if (!res.ok) throw new Error(extractError(body, `HTTP ${res.status}`));
-      setData(body);
+      setData({
+        ...emptyData,
+        ...body,
+        meta: {
+          ...emptyData.meta,
+          ...(body.meta ?? {}),
+        },
+        summary: {
+          ...emptyData.summary,
+          ...(body.summary ?? {}),
+        },
+        risks: Array.isArray(body.risks) ? body.risks : [],
+        catalogs: {
+          ...emptyData.catalogs,
+          ...(body.catalogs ?? {}),
+          valoration: Array.isArray(body.catalogs?.valoration) ? body.catalogs.valoration : [],
+        },
+      });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'No se pudo cargar la valoración.');
     } finally {

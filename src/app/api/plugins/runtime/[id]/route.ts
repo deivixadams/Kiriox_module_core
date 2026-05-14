@@ -5,11 +5,12 @@ import ts from 'typescript';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const registry = readPluginRegistry();
-    const plugin = registry.find(p => p.id === params.id);
+    const plugin = registry.find(p => p.id === id);
 
     if (!plugin || !plugin.entryFile || !existsSync(plugin.entryFile)) {
       return NextResponse.json({ error: 'Plugin o entrypoint no encontrado' }, { status: 404 });

@@ -7,12 +7,21 @@ const repository = new PrismaLinearRiskRepository();
 const EXTERNAL_CATEGORIES = ['regulacion', 'mercado', 'economia', 'competencia'] as const;
 const INTERNAL_CATEGORIES = ['recursos', 'capacidades', 'procesos', 'sistemas', 'personas_clave'] as const;
 
+function normalizeType(type: string | null | undefined): 'INTERNAL' | 'EXTERNAL' | null {
+  if (!type) return null;
+  const normalized = type.toUpperCase();
+  if (normalized === 'INTERNO' || normalized === 'INTERNAL') return 'INTERNAL';
+  if (normalized === 'EXTERNO' || normalized === 'EXTERNAL') return 'EXTERNAL';
+  return null;
+}
+
 export const GET = withAccess({ module: 'linear-risk', permission: 'read' }, async (req) => {
   const url = new URL(req.url);
   const runRaId = url.searchParams.get("runRaId");
-  const type = url.searchParams.get("type") || "INTERNAL";
+  const type = normalizeType(url.searchParams.get("type"));
 
   if (!runRaId) return new Response("runRaId is required", { status: 400 });
+  if (!type) return new Response("type must be INTERNO or EXTERNO", { status: 400 });
 
   const rows = await repository.getInternalExternalContext(runRaId, type);
   const context: Record<string, string> = {};
@@ -26,10 +35,11 @@ export const GET = withAccess({ module: 'linear-risk', permission: 'read' }, asy
 
 export const POST = withAccess({ module: 'linear-risk', permission: 'read' }, async (req) => {
   const body = await req.json();
-  const { runRaId, type } = body;
+  const runRaId = String(body?.runRaId ?? '').trim();
+  const type = normalizeType(body?.type);
 
   if (!runRaId) return new Response("runRaId is required", { status: 400 });
-  if (!type) return new Response("type is required", { status: 400 });
+  if (!type) return new Response("type must be INTERNO or EXTERNO", { status: 400 });
 
   const categories = type === 'EXTERNAL' ? EXTERNAL_CATEGORIES : INTERNAL_CATEGORIES;
   const values = categories

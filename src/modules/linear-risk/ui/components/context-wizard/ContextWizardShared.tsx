@@ -1,26 +1,103 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { AlertCircle, ChevronDown, Info, Loader2, Save, Trash2, X, ChevronRight, CheckCircle2, Target, BarChart3, ShieldCheck, TrendingUp, Briefcase } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  AlertCircle,
+  BarChart3,
+  BriefcaseBusiness,
+  CheckCircle2,
+  Loader2,
+  Save,
+  Scale,
+  ShieldCheck,
+  ShieldPlus,
+  Target,
+  X,
+} from 'lucide-react';
+import { AiFieldAssist } from '@/shared/ai';
+import type { AiFieldContract } from '@/shared/ai';
+
+const OBJETIVO_CONTRACT: AiFieldContract = {
+  module: 'linear-risk',
+  field: 'objetivo',
+  intent: 'complete',
+  minWords: 10,
+  maxWords: 50,
+  tone: 'tecnico',
+  output: 'text',
+  requiredMeaning: ['evaluación', 'riesgo'],
+};
+
+const RECURSOS_CONTRACT: AiFieldContract = {
+  module: 'linear-risk',
+  field: 'recursos',
+  intent: 'complete',
+  minWords: 10,
+  maxWords: 50,
+  tone: 'tecnico',
+  output: 'text',
+  requiredMeaning: ['recursos', 'capacidad operativa'],
+};
+
+const CAPACIDADES_CONTRACT: AiFieldContract = {
+  module: 'linear-risk',
+  field: 'capacidades',
+  intent: 'complete',
+  minWords: 10,
+  maxWords: 50,
+  tone: 'tecnico',
+  output: 'text',
+  requiredMeaning: ['capacidades', 'competencias'],
+};
+
+export const RUN_RA_KEY = 'kiriox_active_run_ra_id';
+
+export function extractError(data: unknown, fallback: string): string {
+  if (!data || typeof data !== 'object') return fallback;
+  const d = data as Record<string, unknown>;
+  if (typeof d.error === 'string') return d.error;
+  if (d.error && typeof d.error === 'object') {
+    const e = d.error as Record<string, unknown>;
+    if (typeof e.message === 'string') return e.message;
+  }
+  return fallback;
+}
+
+export const STEPS = [
+  { id: 1, key: 'contexto', label: 'Contexto', Icon: BriefcaseBusiness, desc: 'Base organizacional, alcance de la evaluación y criterios de riesgo.' },
+  { id: 2, key: 'analisis-riesgo', label: 'Análisis riesgos', Icon: BarChart3, desc: '' },
+  { id: 3, key: 'analisis-control', label: 'Análisis Ctrl', Icon: ShieldCheck, desc: 'Evalúa los controles mitigantes vinculados a cada riesgo identificado.' },
+  { id: 4, key: 'valoracion', label: 'Valoración', Icon: Scale, desc: 'Valora cada riesgo frente a los criterios definidos y toma decisiones.' },
+  { id: 5, key: 'tratamiento', label: 'Tratamiento', Icon: ShieldPlus, desc: 'Define las acciones de tratamiento para los riesgos inaceptables.' },
+] as const;
+
+export const APPETITE_OPTIONS = [
+  { value: 'muy_bajo', label: 'Muy bajo', color: '#10b981' },
+  { value: 'bajo', label: 'Bajo', color: '#34d399' },
+  { value: 'medio', label: 'Medio', color: '#3b82f6' },
+  { value: 'moderado', label: 'Moderado', color: '#3b82f6' },
+  { value: 'alto', label: 'Alto', color: '#f59e0b' },
+  { value: 'muy_alto', label: 'Muy alto', color: '#ef4444' },
+] as const;
 
 export const CARD: React.CSSProperties = {
-  background: 'rgba(15, 23, 42, 0.4)',
-  borderRadius: 16,
-  border: '1px solid rgba(255, 255, 255, 0.05)',
-  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-  backdropFilter: 'blur(8px)',
+  background: 'linear-gradient(160deg, rgba(13,22,50,0.97), rgba(7,16,42,0.95))',
+  border: '1px solid rgba(255,255,255,0.07)',
+  borderRadius: 14,
+  padding: '1.5rem',
 };
 
 export const INPUT_S: React.CSSProperties = {
   width: '100%',
-  padding: '0.6rem 0.8rem',
-  borderRadius: 8,
-  background: 'rgba(255, 255, 255, 0.03)',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
-  color: '#fff',
-  fontSize: '0.85rem',
+  background: 'rgba(17,35,77,0.5)',
+  border: '1px solid rgba(120,149,210,0.2)',
+  borderRadius: 10,
+  color: '#e2e8f0',
+  fontSize: '0.82rem',
+  padding: '0.6rem 0.75rem',
   outline: 'none',
-  transition: 'all 0.2s',
+  boxSizing: 'border-box',
+  fontFamily: 'inherit',
 };
 
 export const TEXTAREA_S: React.CSSProperties = {
@@ -49,244 +126,722 @@ export const SECTION_HDR: React.CSSProperties = {
   gap: '0.45rem',
 };
 
-export function extractError(data: unknown, fallback: string): string {
-  if (!data || typeof data !== 'object') return fallback;
-  const record = data as Record<string, unknown>;
-  if (typeof record.error === 'string') return record.error;
-  if (record.error && typeof record.error === 'object') {
-    const errorRecord = record.error as Record<string, unknown>;
-    if (typeof errorRecord.message === 'string') return errorRecord.message;
-  }
-  return fallback;
+type SaveButtonProps = {
+  saving: boolean;
+  saved: boolean;
+  onClick: () => void;
+  color?: string;
+};
+
+export function SaveButton({ saving, saved, onClick, color = '#3b82f6' }: SaveButtonProps) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.1rem' }}>
+      <button
+        onClick={onClick}
+        disabled={saving}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.45rem',
+          padding: '0.5rem 1.4rem',
+          borderRadius: 10,
+          background: saved ? 'rgba(16,185,129,0.15)' : `${color}22`,
+          border: `1px solid ${saved ? 'rgba(16,185,129,0.4)' : `${color}88`}`,
+          color: saved ? '#34d399' : color,
+          fontSize: '0.82rem',
+          fontWeight: 700,
+          cursor: saving ? 'wait' : 'pointer',
+        }}
+      >
+        {saving ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : saved ? <CheckCircle2 size={14} /> : <Save size={14} />}
+        {saving ? 'Guardando…' : saved ? 'Guardado' : 'Guardar'}
+      </button>
+    </div>
+  );
 }
 
-export function LoaderSection({ label = 'Cargando...' }: { label?: string }) {
+export function LoaderSection() {
   return (
-    <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
-      <Loader2 className="animate-spin" style={{ margin: '0 auto 1rem' }} size={32} />
-      <p style={{ fontSize: '0.9rem', fontWeight: 600 }}>{label}</p>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '3rem', gap: '0.6rem', color: '#475569' }}>
+      <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+      <span style={{ fontSize: '0.82rem' }}>Cargando…</span>
+      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
 
 export function ErrorAlert({ message }: { message: string }) {
   return (
-    <div style={{
-      padding: '1.5rem', borderRadius: 12, background: 'rgba(239, 68, 68, 0.1)',
-      border: '1px solid rgba(239, 68, 68, 0.2)', color: '#f87171',
-      display: 'flex', gap: '0.8rem', alignItems: 'flex-start'
-    }}>
-      <AlertCircle size={20} style={{ flexShrink: 0 }} />
-      <p style={{ fontSize: '0.9rem', margin: 0 }}>{message}</p>
-    </div>
-  );
-}
-
-export function SaveButton({
-  saving,
-  saved,
-  onClick,
-  color = '#38bdf8',
-  label = 'Guardar',
-}: {
-  saving: boolean;
-  saved: boolean;
-  onClick: () => void;
-  color?: string;
-  label?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={saving}
+    <div
       style={{
-        marginTop: '1rem',
-        padding: '0.72rem 1rem',
-        borderRadius: 10,
-        border: `1px solid ${color}55`,
-        background: `${color}1a`,
-        color,
-        fontWeight: 800,
-        fontSize: '0.78rem',
-        cursor: saving ? 'wait' : 'pointer',
-        display: 'inline-flex',
+        display: 'flex',
         alignItems: 'center',
         gap: '0.5rem',
+        background: 'rgba(239,68,68,0.08)',
+        border: '1px solid rgba(239,68,68,0.22)',
+        borderRadius: 10,
+        padding: '0.65rem 0.9rem',
+        fontSize: '0.77rem',
+        color: '#f87171',
       }}
     >
-      {saving ? <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> : saved ? <CheckCircle2 size={15} /> : <Save size={15} />}
-      {saving ? 'Guardando...' : saved ? 'Guardado' : label}
-    </button>
-  );
-}
-
-export function SectionBlock({ title, color, Icon, children }: any) {
-  const [open, setOpen] = useState(true);
-  return (
-    <div style={{ ...CARD, overflow: 'hidden' }}>
-      <button 
-        onClick={() => setOpen(!open)}
-        style={{
-          width: '100%', padding: '1rem 1.5rem', background: 'rgba(0,0,0,0.2)',
-          border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          cursor: 'pointer', borderBottom: open ? '1px solid rgba(255,255,255,0.05)' : 'none'
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', color: color || '#fff' }}>
-          <Icon size={18} />
-          <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</h3>
-        </div>
-        <ChevronDown size={16} color="#64748b" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-      </button>
-      {open && <div style={{ padding: '1.5rem' }}>{children}</div>}
+      <AlertCircle size={13} />
+      {message}
     </div>
   );
 }
 
+export function SimpleInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <div>
+      <label style={LABEL_S}>{label}</label>
+      <input style={INPUT_S} value={value} onChange={onChange} />
+    </div>
+  );
+}
+
+export function SimpleTextarea({
+  label,
+  value,
+  onChange,
+  minHeight = 90,
+}: {
+  label: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  minHeight?: number;
+}) {
+  return (
+    <div>
+      <label style={LABEL_S}>{label}</label>
+      <textarea style={{ ...TEXTAREA_S, minHeight }} value={value} onChange={onChange} />
+    </div>
+  );
+}
+
+export function SectionBlock({
+  title,
+  color,
+  Icon,
+  children,
+}: {
+  title: string;
+  color: string;
+  Icon: React.ComponentType<{ size?: number; color?: string }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      style={{
+        borderRadius: 14,
+        border: '1px solid rgba(255,255,255,0.07)',
+        borderLeft: `4px solid ${color}`,
+        background: 'rgba(9,18,48,0.88)',
+        padding: '1.4rem 1.5rem 1.2rem',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.1rem' }}>
+        <div
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: `${color}22`,
+            border: `1px solid ${color}55`,
+          }}
+        >
+          <Icon size={15} color={color} />
+        </div>
+        <h3 style={{ margin: 0, color, fontSize: '1rem', fontWeight: 800 }}>{title}</h3>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+type EvalForm = {
+  objetivo: string;
+  alcance: string;
+  objeto_evaluado: string;
+  responsable: string;
+  inclusiones: string;
+  exclusiones: string;
+  periodo_inicio: string;
+  periodo_fin: string;
+  metodologia: string;
+  supuestos: string;
+  fuentes: string;
+  apetito: string;
+  element_id: string;
+  activity_id: string;
+};
+
+const EVAL_EMPTY: EvalForm = {
+  objetivo: '',
+  alcance: '',
+  objeto_evaluado: '',
+  responsable: '',
+  inclusiones: '',
+  exclusiones: '',
+  periodo_inicio: '',
+  periodo_fin: '',
+  metodologia: '',
+  supuestos: '',
+  fuentes: '',
+  apetito: '',
+  element_id: '',
+  activity_id: '',
+};
+
 export function EvaluacionTab({ runRaId }: { runRaId: string }) {
-  const [form, setForm] = useState({
-    title: '',
-    objetivo: '',
-    alcance: '',
-    metodologia: '',
-    objeto_evaluado: '',
-    company_id: '',
-    element_id: ''
-  });
-  const [catalogs, setCatalogs] = useState<{ companies: any[], elements: any[] }>({ companies: [], elements: [] });
+  const [form, setForm] = useState<EvalForm>(EVAL_EMPTY);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
-  const MAX_CHARS = 2000;
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [appetiteCatalog, setAppetiteCatalog] = useState<Array<{ appetite_level: string; tolerance_min: number; tolerance_max: number }>>([]);
+  const [elements, setElements] = useState<Array<{ id: string; name: string }>>([]);
+  const [activities, setActivities] = useState<Array<{ id: string; name: string; element_id: string }>>([]);
+
+  const filteredActivities = useMemo(() => {
+    if (!form.element_id) return [];
+    return activities.filter((activity) => activity.element_id === form.element_id);
+  }, [activities, form.element_id]);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`/api/linear-risk/general-context?runRaId=${encodeURIComponent(runRaId)}`);
-        const data = await res.json();
-        if (data.context) setForm({
-          ...data.context,
-          title: data.context.title || '',
-          objetivo: data.context.objetivo || '',
-          alcance: data.context.alcance || '',
-          metodologia: data.context.metodologia || '',
-          objeto_evaluado: data.context.objeto_evaluado || '',
+    fetch(`/api/linear-risk/general-context?runRaId=${encodeURIComponent(runRaId)}`)
+      .then((r) => r.json())
+      .then((d: {
+        context: EvalForm | null;
+        appetiteCatalog: Array<{ appetite_level: string; tolerance_min: number; tolerance_max: number }>;
+        elements: Array<{ id: string; name: string }>;
+        activities: Array<{ id: string; name: string; element_id: string }>;
+      }) => {
+        setElements(d.elements ?? []);
+        setActivities(d.activities ?? []);
+        setAppetiteCatalog(d.appetiteCatalog ?? []);
+
+        const preProcessId = sessionStorage.getItem('KIRIOX_PRESELECTED_PROCESS_ID');
+        const preActivityId = sessionStorage.getItem('KIRIOX_PRESELECTED_ACTIVITY_ID');
+
+        const context = d.context ?? EVAL_EMPTY;
+        setForm({
+          objetivo: String(context.objetivo ?? ''),
+          alcance: String(context.alcance ?? ''),
+          objeto_evaluado: String(context.objeto_evaluado ?? ''),
+          responsable: String(context.responsable ?? ''),
+          inclusiones: String(context.inclusiones ?? ''),
+          exclusiones: String(context.exclusiones ?? ''),
+          periodo_inicio: String(context.periodo_inicio ?? ''),
+          periodo_fin: String(context.periodo_fin ?? ''),
+          metodologia: String(context.metodologia ?? ''),
+          supuestos: String(context.supuestos ?? ''),
+          fuentes: String(context.fuentes ?? ''),
+          apetito: String(context.apetito ?? ''),
+          element_id: String(context.element_id ?? preProcessId ?? ''),
+          activity_id: String(context.activity_id ?? preActivityId ?? ''),
         });
-        setCatalogs({ companies: data.companies || [], elements: data.elements || [] });
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
+      })
+      .catch(() => setError('No se pudo cargar el contexto de evaluación.'))
+      .finally(() => setLoading(false));
   }, [runRaId]);
 
-  const save = async (patch: any) => {
-    const next = { ...form, ...patch };
-    setForm(next);
+  function set(key: keyof EvalForm) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
+  }
+
+  async function handleSave() {
     setSaving(true);
+    setError(null);
     try {
-      await fetch('/api/linear-risk/general-context', {
+      const res = await fetch('/api/linear-risk/general-context', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runRaId, context: next })
+        body: JSON.stringify({ ...form, runRaId }),
       });
-    } catch (e) {
-      console.error(e);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as { error?: { message?: string } }));
+        throw new Error(body?.error?.message ?? `HTTP ${res.status}`);
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al guardar.');
     } finally {
       setSaving(false);
     }
-  };
+  }
+
+  if (loading) return <LoaderSection />;
+
+  const maxChars = 2000;
+
+  return (
+    <div>
+      {error && <ErrorAlert message={error} />}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 0.85fr', gap: '1rem', alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.9rem' }}>
+          <div>
+            <label style={LABEL_S}>Objetivo de la evaluación *</label>
+            <div style={{ position: 'relative' }}>
+              <textarea
+                maxLength={maxChars}
+                style={{ ...TEXTAREA_S, minHeight: 80, paddingBottom: '1.4rem' }}
+                value={form.objetivo}
+                onChange={set('objetivo')}
+                placeholder="¿Qué busca determinar esta evaluación?..."
+              />
+              <span style={{ position: 'absolute', bottom: '0.4rem', right: '0.6rem', fontSize: '0.62rem', color: '#475569' }}>
+                {form.objetivo.length}/{maxChars}
+              </span>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              <AiFieldAssist
+                contract={OBJETIVO_CONTRACT}
+                currentValue={form.objetivo || form.objeto_evaluado}
+                onAccept={(value) => setForm(f => ({ ...f, objetivo: value }))}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={LABEL_S}>Alcance *</label>
+            <div style={{ position: 'relative' }}>
+              <textarea
+                maxLength={maxChars}
+                style={{ ...TEXTAREA_S, minHeight: 80, paddingBottom: '1.4rem' }}
+                value={form.alcance}
+                onChange={set('alcance')}
+                placeholder="¿Qué procesos, unidades y periodos cubre?..."
+              />
+              <span style={{ position: 'absolute', bottom: '0.4rem', right: '0.6rem', fontSize: '0.62rem', color: '#475569' }}>
+                {form.alcance.length}/{maxChars}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            border: '1px solid rgba(245,158,11,0.25)',
+            borderRadius: 12,
+            padding: '1rem',
+            background: 'rgba(245,158,11,0.04)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.9rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <Target size={13} color="#f59e0b" />
+            <span style={{ color: '#f59e0b', fontSize: '0.8rem', fontWeight: 700 }}>Proceso evaluado</span>
+          </div>
+
+          <div>
+            <label style={LABEL_S}>Proceso asociado</label>
+            <select
+              style={{ ...INPUT_S, appearance: 'auto' }}
+              value={form.element_id}
+              onChange={(e) => setForm((f) => ({ ...f, element_id: e.target.value, activity_id: '' }))}
+            >
+              <option value="">Seleccione un proceso...</option>
+              {elements.map((element) => (
+                <option key={element.id} value={element.id}>{element.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={LABEL_S}>Actividad específica</label>
+            <select
+              style={{ ...INPUT_S, appearance: 'auto' }}
+              value={form.activity_id}
+              onChange={(e) => setForm((f) => ({ ...f, activity_id: e.target.value }))}
+              disabled={!form.element_id}
+            >
+              <option value="">{form.element_id ? 'Seleccione una actividad...' : 'Primero seleccione un proceso'}</option>
+              {filteredActivities.map((activity) => (
+                <option key={activity.id} value={activity.id}>{activity.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label style={LABEL_S}>Responsable de la evaluación</label>
+            <input
+              style={INPUT_S}
+              value={form.responsable}
+              onChange={set('responsable')}
+              placeholder="Nombre o cargo..."
+            />
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginTop: '0.5rem',
+          padding: '1.25rem',
+          borderRadius: 16,
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+          <label style={{ ...LABEL_S, marginBottom: 0, fontSize: '0.82rem', color: '#f8fafc' }}>Apetito general de riesgo</label>
+          <p style={{ margin: 0, fontSize: '0.72rem', color: '#64748b', lineHeight: 1.4 }}>
+            El apetito general de riesgo establece el nivel de exposición que la organización está dispuesta a asumir para alcanzar sus objetivos estratégicos en este proceso.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {(appetiteCatalog.length > 0 ? appetiteCatalog : APPETITE_OPTIONS).map((option) => {
+            const level = 'appetite_level' in option ? option.appetite_level : option.label;
+            const value = 'appetite_level' in option ? option.appetite_level.toLowerCase().replace(/ /g, '_') : option.value;
+            const min = 'tolerance_min' in option ? option.tolerance_min : null;
+            const max = 'tolerance_max' in option ? option.tolerance_max : null;
+            const base = APPETITE_OPTIONS.find((item) => item.value === value || item.label.toLowerCase() === level.toLowerCase());
+            const color = base?.color || '#64748b';
+            const active = form.apetito === value;
+
+            return (
+              <button
+                key={value}
+                onClick={() => setForm((f) => ({ ...f, apetito: f.apetito === value ? '' : value }))}
+                style={{
+                  padding: '0.45rem 1rem',
+                  borderRadius: 10,
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  background: active ? `${color}22` : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${active ? `${color}88` : 'rgba(255,255,255,0.08)'}`,
+                  color: active ? color : '#64748b',
+                  cursor: 'pointer',
+                  transition: 'all 0.18s ease',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.18rem',
+                  minWidth: 90,
+                }}
+              >
+                <span>{level}</span>
+                {min !== null && max !== null ? (
+                  <span style={{ fontSize: '0.6rem', opacity: 0.75, fontWeight: 500 }}>{min}% - {max}%</span>
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <SaveButton saving={saving} saved={saved} onClick={handleSave} color="#f59e0b" />
+    </div>
+  );
+}
+
+type InternalForm = {
+  recursos: string;
+  capacidades: string;
+  procesos: string;
+  sistemas: string;
+  personas_clave: string;
+};
+
+const INTERNAL_EMPTY: InternalForm = {
+  recursos: '',
+  capacidades: '',
+  procesos: '',
+  sistemas: '',
+  personas_clave: '',
+};
+
+export function InternoTab({ runRaId }: { runRaId: string }) {
+  const [form, setForm] = useState<InternalForm>(INTERNAL_EMPTY);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/linear-risk/internal-external?runRaId=${encodeURIComponent(runRaId)}&type=INTERNO`)
+      .then((r) => r.json())
+      .then((d: { context?: InternalForm }) => setForm({ ...INTERNAL_EMPTY, ...(d.context ?? {}) }))
+      .catch(() => setError('No se pudo cargar el contexto interno.'))
+      .finally(() => setLoading(false));
+  }, [runRaId]);
+
+  function set(key: keyof InternalForm) {
+    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/linear-risk/internal-external', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, runRaId, type: 'INTERNO' }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al guardar.');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (loading) return <LoaderSection />;
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+    <div>
+      {error && <ErrorAlert message={error} />}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
         <div>
-          <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Empresa</label>
-          <select style={INPUT_S} value={form.company_id} onChange={e => save({ company_id: e.target.value })}>
-            <option value="">Seleccione...</option>
-            {catalogs.companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Título de evaluación</label>
-          <input style={INPUT_S} value={form.title} onChange={e => setForm({...form, title: e.target.value})} onBlur={() => save({})} placeholder="Ej: Evaluación integral 2026" />
-        </div>
-        <div>
-          <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Macroproceso / Proceso</label>
-          <select style={INPUT_S} value={form.element_id} onChange={e => save({ element_id: e.target.value })}>
-            <option value="">Seleccione...</option>
-            {catalogs.elements.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div>
-          <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Objetivo</label>
-          <div style={{ position: 'relative' }}>
-            <textarea 
-              style={{ ...INPUT_S, minHeight: 100 }} 
-              value={form.objetivo} 
-              onChange={e => setForm({...form, objetivo: e.target.value.slice(0, MAX_CHARS)})}
-              onBlur={() => save({})}
+          <label style={LABEL_S}>Recursos</label>
+          <textarea style={{ ...TEXTAREA_S, minHeight: 90 }} value={form.recursos} onChange={set('recursos')} />
+          <div style={{ marginTop: 6 }}>
+            <AiFieldAssist
+              contract={RECURSOS_CONTRACT}
+              currentValue={form.recursos}
+              onAccept={(value) => setForm(f => ({ ...f, recursos: value }))}
             />
-            <span style={{ position: 'absolute', bottom: '0.4rem', right: '0.6rem', fontSize: '0.62rem', color: '#475569' }}>
-              {(form.objetivo || '').length}/{MAX_CHARS}
-            </span>
           </div>
         </div>
         <div>
-          <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 700, display: 'block', marginBottom: '0.4rem', textTransform: 'uppercase' }}>Descripción del alcance</label>
-          <textarea 
-            style={{ ...INPUT_S, minHeight: 80 }} 
-            value={form.alcance} 
-            onChange={e => setForm({...form, alcance: e.target.value})}
-            onBlur={() => save({})}
-          />
+          <label style={LABEL_S}>Capacidades</label>
+          <textarea style={{ ...TEXTAREA_S, minHeight: 90 }} value={form.capacidades} onChange={set('capacidades')} />
+          <div style={{ marginTop: 6 }}>
+            <AiFieldAssist
+              contract={CAPACIDADES_CONTRACT}
+              currentValue={form.capacidades}
+              onAccept={(value) => setForm(f => ({ ...f, capacidades: value }))}
+            />
+          </div>
+        </div>
+        <SimpleTextarea label="Sistemas" value={form.sistemas} onChange={set('sistemas')} minHeight={90} />
+        <div style={{ gridColumn: '1 / -1' }}>
+          <SimpleInput label="Personas clave" value={form.personas_clave} onChange={set('personas_clave')} />
         </div>
       </div>
+      <SaveButton saving={saving} saved={saved} onClick={handleSave} color="#22c55e" />
     </div>
   );
 }
 
-export function ExternoTab({ runRaId }: { runRaId: string }) { return <div style={{ color: '#475569', fontSize: '0.85rem' }}>Configuración de contexto externo (PESTEL).</div>; }
-export function InternoTab({ runRaId }: { runRaId: string }) { return <div style={{ color: '#475569', fontSize: '0.85rem' }}>Configuración de contexto interno (Organigrama, Cultura).</div>; }
+type ExternalForm = {
+  regulacion: string;
+  mercado: string;
+  economia: string;
+  competencia: string;
+};
 
-export function ExitDialog({ onContinue, onDraft, onDelete, deleting }: any) {
+const EXTERNAL_EMPTY: ExternalForm = {
+  regulacion: '',
+  mercado: '',
+  economia: '',
+  competencia: '',
+};
+
+export function ExternoTab({ runRaId }: { runRaId: string }) {
+  const [form, setForm] = useState<ExternalForm>(EXTERNAL_EMPTY);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/linear-risk/internal-external?runRaId=${encodeURIComponent(runRaId)}&type=EXTERNO`)
+      .then((r) => r.json())
+      .then((d: { context?: ExternalForm }) => setForm({ ...EXTERNAL_EMPTY, ...(d.context ?? {}) }))
+      .catch(() => setError('No se pudo cargar el contexto externo.'))
+      .finally(() => setLoading(false));
+  }, [runRaId]);
+
+  function set(key: keyof ExternalForm) {
+    return (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/linear-risk/internal-external', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, runRaId, type: 'EXTERNO' }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al guardar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <LoaderSection />;
+
   return (
-    <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem'
-    }}>
-      <div style={{ ...CARD, maxWidth: 450, width: '100%', padding: '2rem', textAlign: 'center' }}>
-        <div style={{ width: 64, height: 64, background: 'rgba(239, 68, 68, 0.1)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem' }}>
-          <AlertCircle size={32} color="#ef4444" />
+    <div>
+      {error && <ErrorAlert message={error} />}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <SimpleInput label="Regulación" value={form.regulacion} onChange={set('regulacion')} />
+        <SimpleInput label="Mercado" value={form.mercado} onChange={set('mercado')} />
+        <SimpleInput label="Economía" value={form.economia} onChange={set('economia')} />
+        <SimpleInput label="Competencia" value={form.competencia} onChange={set('competencia')} />
+      </div>
+      <SaveButton saving={saving} saved={saved} onClick={handleSave} color="#a78bfa" />
+    </div>
+  );
+}
+
+export function ExitDialog({
+  onContinue,
+  onDraft,
+  onDelete,
+  deleting,
+}: {
+  onContinue: () => void;
+  onDraft: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 2000,
+        background: 'rgba(0,0,0,0.75)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1.5rem',
+      }}
+    >
+      <div
+        style={{
+          width: 'min(92vw, 440px)',
+          borderRadius: 22,
+          background: 'linear-gradient(160deg, rgba(13,22,50,0.99), rgba(7,16,42,0.98))',
+          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 32px 60px rgba(0,0,0,0.5)',
+          padding: '2rem 1.75rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.25rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              background: 'rgba(245,158,11,0.12)',
+              border: '1px solid rgba(245,158,11,0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <AlertCircle size={20} color="#f59e0b" />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#f8fafc' }}>¿Salir de la evaluación?</h3>
+            <p style={{ margin: 0, fontSize: '0.74rem', color: '#64748b' }}>El ID de evaluación se conserva en el sistema.</p>
+          </div>
         </div>
-        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fff', marginBottom: '0.5rem' }}>¿Seguro que desea salir?</h3>
-        <p style={{ fontSize: '0.9rem', color: '#94a3b8', lineHeight: 1.6, marginBottom: '2rem' }}>
-          Los cambios se guardan automáticamente. Puede retomar la evaluación más tarde desde el dashboard principal.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <button onClick={onContinue} style={{ padding: '0.8rem', borderRadius: 10, background: '#3b82f6', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' }}>Continuar editando</button>
-          <button onClick={onDraft} style={{ padding: '0.8rem', borderRadius: 10, background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', fontWeight: 700, cursor: 'pointer' }}>Salir y guardar borrador</button>
-          <button onClick={onDelete} disabled={deleting} style={{ padding: '0.8rem', borderRadius: 10, background: 'transparent', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.2)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-            {deleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} Eliminar evaluación
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <button
+            onClick={onDraft}
+            style={{
+              width: '100%',
+              padding: '0.85rem 1rem',
+              borderRadius: 12,
+              textAlign: 'left',
+              background: 'rgba(59,130,246,0.08)',
+              border: '1px solid rgba(59,130,246,0.25)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+            }}
+          >
+            <Save size={18} color="#3b82f6" style={{ flexShrink: 0 }} />
+            <div>
+              <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: '#93c5fd' }}>Guardar como borrador</p>
+              <p style={{ margin: 0, fontSize: '0.72rem', color: '#475569' }}>El progreso se conserva. Puedes retomar la evaluación después.</p>
+            </div>
+          </button>
+
+          <button
+            onClick={onDelete}
+            disabled={deleting}
+            style={{
+              width: '100%',
+              padding: '0.85rem 1rem',
+              borderRadius: 12,
+              textAlign: 'left',
+              background: 'rgba(239,68,68,0.06)',
+              border: '1px solid rgba(239,68,68,0.22)',
+              cursor: deleting ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              opacity: deleting ? 0.7 : 1,
+            }}
+          >
+            {deleting ? <Loader2 size={18} color="#f87171" style={{ flexShrink: 0, animation: 'spin 1s linear infinite' }} /> : <X size={18} color="#f87171" style={{ flexShrink: 0 }} />}
+            <div>
+              <p style={{ margin: 0, fontSize: '0.84rem', fontWeight: 700, color: '#f87171' }}>Cancelar evaluación</p>
+              <p style={{ margin: 0, fontSize: '0.72rem', color: '#475569' }}>Elimina todo el progreso de esta sesión permanentemente.</p>
+            </div>
           </button>
         </div>
+
+        <button
+          onClick={onContinue}
+          style={{
+            padding: '0.6rem',
+            borderRadius: 10,
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            color: '#64748b',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          Continuar evaluación
+        </button>
       </div>
+      <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
-
-export const STEPS = [
-  { id: 1, key: 'context', label: 'Contexto', desc: 'Definición del alcance y entorno.', Icon: Target },
-  { id: 2, key: 'risks', label: 'Análisis riesgos', desc: 'Identificación y valoración inherente.', Icon: BarChart3 },
-  { id: 3, key: 'controls', label: 'Análisis Ctrl', desc: 'Evaluación de controles mitigantes.', Icon: ShieldCheck },
-  { id: 4, key: 'valuation', label: 'Valoración', desc: 'Semaforización y nivel de riesgo.', Icon: TrendingUp },
-  { id: 5, key: 'treatment', label: 'Tratamiento', desc: 'Plan de respuesta y monitoreo.', Icon: Briefcase },
-];
