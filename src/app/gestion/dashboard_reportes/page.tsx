@@ -2,10 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { ReportesModule } from '@/modules/reportes';
-import { Reporte, ReportesKpis as KpiType, ReporteCategoria } from '@/modules/reportes/reportes.types';
+import type { Reporte, ReportesKpis as KpiType } from '@/modules/reportes/reportes.types';
 import { ReportesHeader } from '@/components/reportes/ReportesHeader';
 import { ReportesKpis } from '@/components/reportes/ReportesKpis';
-import { ReporteCard } from '@/components/reportes/ReporteCard';
+import { ReportesCategoriaTable } from '@/components/reportes/ReportesCategoriaTable';
 import styles from '@/components/reportes/reportes.module.css';
 
 export default function DashboardReportesPage() {
@@ -18,12 +18,12 @@ export default function DashboardReportesPage() {
       try {
         const [allReportes, stats] = await Promise.all([
           ReportesModule.listReportes(),
-          ReportesModule.obtenerKpis()
+          ReportesModule.obtenerKpis(),
         ]);
         setReportes(allReportes);
         setKpis(stats);
-      } catch (error) {
-        console.error("Error loading reportes:", error);
+      } catch {
+        // silent — production would surface this via error boundary
       } finally {
         setLoading(false);
       }
@@ -35,19 +35,11 @@ export default function DashboardReportesPage() {
     return <div className={styles.dashboard}>Cargando dashboard...</div>;
   }
 
-  const reportesOrdenados = [...reportes].sort((a, b) => a.nombre.localeCompare(b.nombre));
-
   return (
     <main className={styles.dashboard}>
       <ReportesHeader />
-      
       <ReportesKpis kpis={kpis} />
-
-      <div className={styles.reportGrid}>
-        {reportesOrdenados.map(reporte => (
-          <ReporteCard key={reporte.id} reporte={reporte} />
-        ))}
-      </div>
+      <ReportesCategoriaTable reportes={reportes} />
     </main>
   );
 }

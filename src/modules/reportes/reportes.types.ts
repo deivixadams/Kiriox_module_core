@@ -1,4 +1,4 @@
-export type ReportePeriodicidad = "Diario" | "Mensual" | "Trimestral" | "Anual" | "Eventual";
+export type ReportePeriodicidad = "Diario" | "Semanal" | "Mensual" | "Trimestral" | "Anual" | "Eventual";
 export type ReporteResponsable = "Riesgo" | "Operaciones" | "Contabilidad" | "Cumplimiento" | "Compartido";
 export type ReporteEstado = "pendiente" | "remitido" | "observado" | "vencido" | "en_preparacion";
 export type ReporteCriticidad = "alta" | "media" | "baja";

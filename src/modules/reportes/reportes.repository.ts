@@ -182,6 +182,42 @@ export class ReportesRepository {
       estado: "vencido",
       criticidad: "alta",
       fechaLimite: "2026-05-01"
+    },
+    {
+      id: "REP-016",
+      nombre: "Suscripción y rescates fondos",
+      categoria: "Concentración",
+      descripcion: "Registro de movimientos de suscripción y rescate de participaciones.",
+      periodicidad: "Diario",
+      responsable: "Operaciones",
+      plantillaOficial: true,
+      estado: "pendiente",
+      criticidad: "alta",
+      fechaLimite: "2026-05-14"
+    },
+    {
+      id: "REP-018",
+      nombre: "Instructivo de Liquidez",
+      categoria: "Liquidez",
+      descripcion: "Instructivo oficial para la elaboración y remisión del reporte de liquidez.",
+      periodicidad: "Diario",
+      responsable: "Riesgo",
+      plantillaOficial: true,
+      estado: "remitido",
+      criticidad: "alta",
+      ultimaRemision: "2026-05-13"
+    },
+    {
+      id: "REP-017",
+      nombre: "Colocación de los valores",
+      categoria: "Portafolio",
+      descripcion: "Reporte de colocación y distribución de cuotas en mercado.",
+      periodicidad: "Diario",
+      responsable: "Operaciones",
+      plantillaOficial: true,
+      estado: "pendiente",
+      criticidad: "alta",
+      fechaLimite: "2026-05-14"
     }
   ];
 
