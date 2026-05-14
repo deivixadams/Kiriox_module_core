@@ -9,6 +9,7 @@ export function WizardHeader({
   activeStep,
   onChangeStep,
   onSave,
+  onClose,
   saving,
   currentRun,
   extraActions,
@@ -18,6 +19,7 @@ export function WizardHeader({
   activeStep: StructuralStep['key'];
   onChangeStep: (step: StructuralStep['key']) => void;
   onSave: () => void;
+  onClose?: () => void;
   saving?: boolean;
   currentRun: RunRow | null;
   extraActions?: React.ReactNode;
@@ -44,6 +46,25 @@ export function WizardHeader({
         </div>
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
           {extraActions}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={Boolean(saving)}
+              style={{
+                borderRadius: 10,
+                border: '1px solid rgba(148,163,184,0.38)',
+                background: 'rgba(15,23,42,0.58)',
+                color: '#cbd5e1',
+                padding: '0.5rem 0.9rem',
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              Cerrar
+            </button>
+          )}
           {!hideSave && (
             <button
               type="button"

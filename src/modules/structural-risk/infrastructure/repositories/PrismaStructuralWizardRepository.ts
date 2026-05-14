@@ -228,12 +228,48 @@ export class PrismaStructuralWizardRepository implements IStructuralWizardReposi
   }
 
   async deleteRun(runSaId: string, companyId: string, userId: string): Promise<boolean> {
-    const rows = await prisma.$queryRaw<Array<{ result: boolean }>>(Prisma.sql`
-      SELECT public.sp_delete_graph_run_sa_cascade(
-        ${runSaId}::uuid, ${companyId}::uuid, ${userId}::uuid
-      ) AS result
-    `);
-    return Boolean(rows[0]?.result);
+    void userId;
+
+    return prisma.$transaction(async (tx) => {
+      const owned = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+        SELECT id::text
+        FROM public.graph_run_sa
+        WHERE id = ${runSaId}::uuid
+          AND company_id = ${companyId}::uuid
+        LIMIT 1
+      `);
+      if (!owned[0]?.id) return false;
+
+      // El esquema actual no tiene el stored procedure legado de la fuente.
+      // Eliminamos el run por sus tablas reales asociadas y luego el owner row.
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM public.graph_control_evidence
+        WHERE run_id = ${runSaId}::uuid
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM public.graph_control_hardgate
+        WHERE run_id = ${runSaId}::uuid
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM public.graph_risk_cascade
+        WHERE run_sa_id = ${runSaId}::uuid
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM public.graph_run_lifecycle_history
+        WHERE run_sa_id = ${runSaId}::uuid
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM public.graph_map_run_sa_activities
+        WHERE run_sa_id = ${runSaId}::uuid
+      `);
+      await tx.$executeRaw(Prisma.sql`
+        DELETE FROM public.graph_run_sa
+        WHERE id = ${runSaId}::uuid
+          AND company_id = ${companyId}::uuid
+      `);
+
+      return true;
+    });
   }
 
   // ── Activities ────────────────────────────────────────────────────────────

@@ -43,8 +43,8 @@ export default function StructuralCaptureWizardPage() {
 
   async function handleSaveAndClose() {
     setShowAnalysisModal(false);
-    void vm.saveRun();
-    router.push('/gestion/dashboard_riesgo_estructural');
+    const ok = await vm.saveRunForStep(activeStep);
+    if (ok) router.push('/gestion/dashboard_riesgo_estructural');
   }
 
   async function handleSaveAndComplete() {
@@ -69,6 +69,7 @@ export default function StructuralCaptureWizardPage() {
         activeStep={activeStep}
         onChangeStep={setActiveStep}
         onSave={handleSave}
+        onClose={() => void handleSaveAndClose()}
         saving={vm.saving}
         hideSave={activeStep === 'evidencia'}
         currentRun={vm.currentRun}
@@ -201,11 +202,9 @@ export default function StructuralCaptureWizardPage() {
                 title={vm.title}
                 scopeType={vm.scopeType}
                 methodology={vm.methodology}
-                lifecycleId={vm.lifecycleId}
                 setTitle={vm.setTitle}
                 setScopeType={vm.setScopeType}
                 setMethodology={vm.setMethodology}
-                setLifecycleId={vm.setLifecycleId}
               />
               <RunLifecyclePanel 
                 activities={chosenActivities} 

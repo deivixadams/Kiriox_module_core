@@ -1,8 +1,10 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ActivityRow, DependencyRow, SharedResourceRow, WizardActivitiesResponse, WizardData } from './types';
 import type { DependencyDraft } from './DependencyCaptureCard';
+import type { StructuralStep } from './types';
 
 export function useStructuralCaptureWizard(initialRunSaId?: string) {
   const [loading, setLoading] = useState(true);
@@ -188,6 +190,42 @@ export function useStructuralCaptureWizard(initialRunSaId?: string) {
       });
     } catch (e) {
       console.error('Error in auto-save run:', e);
+    }
+  }
+
+  function resolveLifecycleIdForStep(stepKey: StructuralStep['key']): string | null {
+    const lifecycleCode =
+      stepKey === 'evidencia'
+        ? 'IN_TREATMENT'
+        : 'IN_PROGRESS';
+    return wizard?.catalogs.lifecycle.find((l) => l.code === lifecycleCode)?.id ?? lifecycleId ?? null;
+  }
+
+  async function saveRunForStep(stepKey: StructuralStep['key']) {
+    if (!runId || saving) return false;
+    const nextLifecycleId = resolveLifecycleIdForStep(stepKey);
+    try {
+      const res = await fetch('/api/structural-risk/wizard-run', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          runSaId: runId,
+          title,
+          scope_type: scopeType,
+          methodology,
+          lifecycle_id: nextLifecycleId,
+          change_reason: `Cierre desde paso ${stepKey}`,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+      if (nextLifecycleId) setLifecycleId(nextLifecycleId);
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo guardar el run estructural.');
+      return false;
     }
   }
 
@@ -565,7 +603,7 @@ export function useStructuralCaptureWizard(initialRunSaId?: string) {
     editingDependencyId, sharedResourceDraft, editingSharedResourceId, editingRiskCascadeId,
     setTitle, setScopeType, setMethodology, setLifecycleId,
     setDependencyDraft,
-    createRun, saveRun, completeRun, selectRun, toggleActivity,
+    createRun, saveRun, saveRunForStep, completeRun, selectRun, toggleActivity,
     saveDependency, saveSharedResource, saveRiskCascade,
     beginEditDependency, cancelEditDependency, removeDependency,
     setSharedResourceDraft, beginEditSharedResource, cancelEditSharedResource, removeSharedResource,

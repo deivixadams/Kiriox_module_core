@@ -10,21 +10,17 @@ export function RunConfigPanel({
   title,
   scopeType,
   methodology,
-  lifecycleId,
   setTitle,
   setScopeType,
   setMethodology,
-  setLifecycleId,
 }: {
   wizard: WizardData;
   title: string;
   scopeType: string;
   methodology: string;
-  lifecycleId: string;
   setTitle: (v: string) => void;
   setScopeType: (v: string) => void;
   setMethodology: (v: string) => void;
-  setLifecycleId: (v: string) => void;
 }) {
   const inputStyle: React.CSSProperties = {
     width: '100%', background: 'rgba(17,35,77,0.5)', border: '1px solid rgba(120,149,210,0.25)',
@@ -53,13 +49,6 @@ export function RunConfigPanel({
           <select value={methodology} onChange={(e) => setMethodology(e.target.value)} style={inputStyle}>
             <option value="">Seleccione</option>
             {wizard.catalogs.methodologies.map((c) => <option key={c.id} value={c.code}>{c.name}</option>)}
-          </select>
-        </div>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <label style={{ display: 'block', color: '#94a3b8', fontSize: '0.74rem', marginBottom: 5 }}>Lifecycle</label>
-          <select value={lifecycleId} onChange={(e) => setLifecycleId(e.target.value)} style={inputStyle}>
-            <option value="">Seleccione</option>
-            {wizard.catalogs.lifecycle.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
       </div>
