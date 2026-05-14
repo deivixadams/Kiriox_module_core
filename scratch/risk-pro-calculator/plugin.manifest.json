@@ -6,6 +6,6 @@
   "author": "Kiriox Labs",
   "status": "installed",
   "permissions": ["read:risk", "write:risk", "register:ui"],
-  "extensionPoints": ["dashboard:widget"],
+  "extensionPoints": ["linear-risk:dashboard:widget"],
   "dependencies": []
 }

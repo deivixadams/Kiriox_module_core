@@ -96,4 +96,10 @@ export interface KirioxPluginContract {
   deactivate?(): Promise<void> | void;
 
   uninstall?(): Promise<void> | void;
+
+  /**
+   * Contribuciones de interfaz de usuario.
+   * Mapea el ID del punto de extensión a un componente o función que lo retorne.
+   */
+  uiContributions?: Record<string, any>;
 }
