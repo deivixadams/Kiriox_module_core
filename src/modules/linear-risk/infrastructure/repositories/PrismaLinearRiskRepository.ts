@@ -601,69 +601,67 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
   // --- STEP 3: CONTROL ANALYSIS ---
 
   async getControlAnalysisData(runRaId: string, companyId: string, riskId?: string) {
-    const [risks, controlTypes, controlNatures, controlFrequencies, controlEffectiveness, controlCoverage, owners] = await Promise.all([
-      prisma.$queryRaw<any[]>(Prisma.sql`
+    // 1. Get all risks for this evaluation
+    const risks = await prisma.$queryRaw<any[]>(Prisma.sql`
+      SELECT
+        r.id::text,
+        r.name,
+        r.cause,
+        r.event,
+        ra.inherent_risk_score::float8 AS inherent_score,
+        ra.residual_risk_score::float8 AS residual_score
+      FROM public.run_ra_risks r
+      JOIN public.run_ra_risk_analysis ra ON ra.run_ra_risk_id = r.id
+      WHERE r.run_ra_id = ${runRaId}::uuid
+      ORDER BY r.created_at ASC
+    `);
+
+    // 2. Determine target risk(s)
+    const targetRisks = riskId ? risks.filter(r => r.id === riskId) : risks;
+
+    // 3. For each target risk, get its controls and their details
+    const risksWithControls = await Promise.all(targetRisks.map(async (r) => {
+      const controls = await prisma.$queryRaw<any[]>(Prisma.sql`
         SELECT
-          r.id::text, r.name, r.event, r.cause, r.consequence,
-          cat.name AS risk_category,
-          a.inherent_risk_score::float8,
-          a.impact_score::float8,
-          a.probability_score::float8,
-          a.residual_risk_score::float8,
-          a.residual_impact::float8,
-          a.residual_probability::float8,
-          a.residual_justification,
-          ilev.name AS inherent_level_name,
-          ilev.color AS inherent_level_color
-        FROM public.run_ra_risks r
-        LEFT JOIN public.run_ra_risk_analysis a ON a.run_ra_risk_id = r.id
-        LEFT JOIN public.catalog_risk_category cat ON cat.id = r.risk_category
-        LEFT JOIN public.catalog_ra_inherent_level ilev ON ilev.company_id = ${companyId}::uuid 
-             AND a.inherent_risk_score >= ilev.min_score AND a.inherent_risk_score <= ilev.max_score
-        WHERE r.run_ra_id = ${runRaId}::uuid
-        ORDER BY r.created_at ASC
-      `),
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, name FROM public.catalog_control_type ORDER BY name ASC`),
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, name FROM public.catalog_control_nature ORDER BY name ASC`),
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, name FROM public.catalog_control_frequency ORDER BY name ASC`),
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, numeric_value::float8 AS value, name, code FROM public.catalog_ra_control_effectiveness WHERE is_active = true ORDER BY ordinal ASC`),
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, numeric_value::float8 AS value, name, code FROM public.catalog_ra_control_coverage WHERE is_active = true ORDER BY ordinal ASC`),
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, COALESCE(name,'') || ' ' || COALESCE(last_name,'') AS name FROM public.users WHERE company_id = ${companyId}::uuid AND is_active = true ORDER BY name ASC`),
+          c.id::text AS control_id,
+          c.name,
+          c.description,
+          c.control_type::text AS control_type_id,
+          c.control_nature::text AS control_nature_id,
+          c.owner_id::text AS owner_id,
+          c.frequency::text AS frequency_id,
+          c.design::float8,
+          c.implementation::float8,
+          c.operation::float8,
+          c.cobertura::float8,
+          m.mitigation_strength::float8
+        FROM public.map_run_ra_risk_controls m
+        JOIN public.run_ra_controls c ON c.id = m.run_ra_control_id
+        WHERE m.run_ra_risk_id = ${r.id}::uuid
+      `);
+
+      return {
+        ...r,
+        controls
+      };
+    }));
+
+    // 4. Load Catalogs
+    const [controlTypes, controlNatures, frequencies, owners] = await Promise.all([
+      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, name FROM public.catalog_control_type`),
+      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, name FROM public.catalog_controls_category WHERE is_active = true`),
+      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, name FROM public.catalog_controls_frequency WHERE is_active = true`),
+      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, name FROM public.users WHERE company_id = ${companyId}::uuid AND is_active = true`),
     ]);
 
-    const targetRiskId = riskId || risks[0]?.id;
-    const current = risks.find(r => r.id === targetRiskId);
-
-    const controls = targetRiskId ? await prisma.$queryRaw<any[]>(Prisma.sql`
-      SELECT
-        m.id::text AS mapping_id,
-        m.run_ra_control_id::text AS control_id,
-        c.name,
-        c.control_type::text,
-        c.control_nature::text,
-        c.owner_id::text,
-        c.frequency::text,
-        m.design::float8,
-        m.implementation::float8,
-        m.operation::float8,
-        m.cobertura::float8
-      FROM public.map_run_ra_risk_controls m
-      JOIN public.run_ra_controls c ON c.id = m.run_ra_control_id
-      WHERE m.run_ra_risk_id = ${targetRiskId}::uuid
-      ORDER BY m.created_at ASC
-    `) : [];
-
     return {
-      risks,
-      current,
-      controls,
+      risks: risksWithControls,
+      allRisks: risks,
       catalogs: {
-        owners,
-        control_types: controlTypes,
-        control_natures: controlNatures,
-        control_frequencies: controlFrequencies,
-        control_effectiveness: controlEffectiveness,
-        control_coverage: controlCoverage,
+        controlTypes,
+        controlNatures,
+        frequencies,
+        owners
       }
     };
   }
@@ -689,18 +687,12 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
               control_nature = ${c.control_nature || null}::uuid,
               owner_id = ${c.owner_id || null}::uuid,
               frequency = ${c.frequency || null}::uuid,
+              design = ${c.design || 0},
+              implementation = ${c.implementation || 0},
+              operation = ${c.operation || 0},
+              cobertura = ${c.cobertura || 0},
               updated_at = now()
           WHERE id = ${c.control_id}::uuid
-        `);
-
-        await tx.$executeRaw(Prisma.sql`
-          UPDATE public.map_run_ra_risk_controls
-          SET design = ${c.design},
-              implementation = ${c.implementation},
-              operation = ${c.operation},
-              cobertura = ${c.cobertura},
-              updated_at = now()
-          WHERE run_ra_risk_id = ${riskId}::uuid AND run_ra_control_id = ${c.control_id}::uuid
         `);
       }
 
@@ -712,9 +704,10 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
       const inherent = Number(analysis[0]?.inherent_risk_score ?? 0);
 
       const mappings = await tx.$queryRaw<any[]>(Prisma.sql`
-        SELECT design::float8, implementation::float8, operation::float8, cobertura::float8
-        FROM public.map_run_ra_risk_controls
-        WHERE run_ra_risk_id = ${riskId}::uuid
+        SELECT c.design::float8, c.implementation::float8, c.operation::float8, c.cobertura::float8
+        FROM public.map_run_ra_risk_controls m
+        JOIN public.run_ra_controls c ON c.id = m.run_ra_control_id
+        WHERE m.run_ra_risk_id = ${riskId}::uuid
       `);
 
       let totalReduction = 0;
@@ -742,20 +735,22 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
     return await prisma.$transaction(async (tx) => {
       const controlIdRows = await tx.$queryRaw<any[]>(Prisma.sql`
         INSERT INTO public.run_ra_controls (
-          id, run_ra_id, name, description, control_type, control_nature, owner_id, frequency, is_existing, is_active, created_at, updated_at
+          id, run_ra_id, name, description, control_type, control_nature, owner_id, frequency, is_existing, is_active,
+          design, implementation, operation, cobertura, created_at, updated_at
         ) VALUES (
           gen_random_uuid(), ${runRaId}::uuid, ${controlData.control_name}, ${controlData.control_description || ''},
           ${controlData.control_type}::uuid, ${controlData.control_nature || null}::uuid, ${controlData.owner_id || null}::uuid,
-          ${controlData.frequency || null}::uuid, true, true, now(), now()
+          ${controlData.frequency || null}::uuid, true, true,
+          3, 3, 3, 75, now(), now()
         ) RETURNING id::text
       `);
       const controlId = controlIdRows[0].id;
 
       await tx.$executeRaw(Prisma.sql`
         INSERT INTO public.map_run_ra_risk_controls (
-          id, run_ra_risk_id, run_ra_control_id, design, implementation, operation, cobertura, created_at, updated_at
+          id, run_ra_risk_id, run_ra_control_id, mitigation_strength, effect_type, reduces_probability, reduces_impact, created_at, updated_at
         ) VALUES (
-          gen_random_uuid(), ${riskId}::uuid, ${controlId}::uuid, 3, 3, 3, 75, now(), now()
+          gen_random_uuid(), ${riskId}::uuid, ${controlId}::uuid, 1, 'MITIGANTE', true, true, now(), now()
         )
       `);
       return controlId;
@@ -783,7 +778,7 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
           cat.name AS risk_category,
           a.inherent_risk_score::float8 AS inherent_score,
           a.residual_risk_score::float8 AS residual_score,
-          a.id_valoration::text,
+          r.id_valoration::text,
           ilev.name AS inherent_level,
           ilev.color AS inherent_level_color,
           rlev.name AS residual_level,
@@ -791,14 +786,14 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
         FROM public.run_ra_risks r
         LEFT JOIN public.run_ra_risk_analysis a ON a.run_ra_risk_id = r.id
         LEFT JOIN public.catalog_risk_category cat ON cat.id = r.risk_category
-        LEFT JOIN public.catalog_ra_inherent_level ilev ON ilev.company_id = ${companyId}::uuid 
-             AND a.inherent_risk_score >= ilev.min_score AND a.inherent_risk_score <= ilev.max_score
-        LEFT JOIN public.catalog_ra_inherent_level rlev ON rlev.company_id = ${companyId}::uuid 
-             AND a.residual_risk_score >= rlev.min_score AND a.residual_risk_score <= rlev.max_score
+        LEFT JOIN public.catalog_risk_level ilev
+             ON a.inherent_risk_score >= ilev.min_score AND a.inherent_risk_score <= ilev.max_score AND ilev.is_active = true
+        LEFT JOIN public.catalog_risk_level rlev
+             ON a.residual_risk_score >= rlev.min_score AND a.residual_risk_score <= rlev.max_score AND rlev.is_active = true
         WHERE r.run_ra_id = ${runRaId}::uuid
         ORDER BY r.created_at ASC
       `),
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, label, code FROM public.catalog_ra_valoration WHERE is_active = true ORDER BY label ASC`),
+      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id::text, decision AS label, decision AS code FROM public.catalog_ra_valoration WHERE is_active = true ORDER BY decision ASC`),
     ]);
 
     // For each risk, fetch its controls
@@ -892,5 +887,95 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
       DELETE FROM public.run_ra_risk_treatment
       WHERE id = ${id}::uuid AND run_ra_id = ${runRaId}::uuid
     `);
+  }
+
+  // --- LIFECYCLE STATE TRANSITION ---
+
+  async transitionLifecycleState(input: {
+    runRaId: string;
+    companyId: string;
+    changedBy: string;
+    toCode: string;
+    changeReason?: string | null;
+    completionReason?: string | null;
+  }): Promise<void> {
+    const { runRaId, companyId, changedBy, toCode, changeReason, completionReason } = input;
+
+    // 1. Resolve target lifecycle state
+    const stateRows = await prisma.$queryRaw<{ id: string; code: string }[]>(Prisma.sql`
+      SELECT id::text, code
+      FROM public.catalog_ra_lifecycle
+      WHERE code = ${toCode}
+      LIMIT 1
+    `);
+    if (!stateRows[0]) throw new Error(`Lifecycle state not found: ${toCode}`);
+    const toState = stateRows[0];
+
+    // 2. Verify run_ra ownership
+    const runRows = await prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT id::text
+      FROM public.run_ra
+      WHERE id = ${runRaId}::uuid
+        AND company_id = ${companyId}::uuid
+      LIMIT 1
+    `);
+    if (!runRows[0]) throw new Error('run_ra not found or access denied');
+
+    // 3. Get current lifecycle entry
+    const current = await prisma.$queryRaw<{ id: string; to_lifecycle_id: string }[]>(Prisma.sql`
+      SELECT id::text, to_lifecycle_id::text
+      FROM public.catalog_ra_lifecycle_history
+      WHERE run_ra_id = ${runRaId}::uuid
+        AND is_current = true
+      ORDER BY changed_at DESC
+      LIMIT 1
+    `);
+
+    const currentTo = current[0]?.to_lifecycle_id ?? null;
+
+    // 4. If already in the target state, just touch updated_at
+    if (currentTo && currentTo === toState.id) {
+      await prisma.$executeRaw(Prisma.sql`
+        UPDATE public.run_ra SET updated_at = now() WHERE id = ${runRaId}::uuid
+      `);
+      return;
+    }
+
+    // 5. Transition within a transaction
+    await prisma.$transaction(async (tx) => {
+      // Mark previous entry as not current
+      if (current[0]) {
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE public.catalog_ra_lifecycle_history
+          SET is_current = false
+          WHERE id = ${current[0].id}::uuid
+        `);
+      }
+
+      // Insert new lifecycle history entry
+      await tx.$executeRaw(Prisma.sql`
+        INSERT INTO public.catalog_ra_lifecycle_history (
+          id, run_ra_id, from_lifecycle_id, to_lifecycle_id,
+          change_reason, completion_reason, changed_by, changed_at, is_current
+        ) VALUES (
+          gen_random_uuid(),
+          ${runRaId}::uuid,
+          ${currentTo ? Prisma.sql`${currentTo}::uuid` : Prisma.sql`NULL`},
+          ${toState.id}::uuid,
+          ${changeReason ?? null},
+          ${completionReason ?? null},
+          ${changedBy}::uuid,
+          now(),
+          true
+        )
+      `);
+
+      // Update run_ra.status
+      await tx.$executeRaw(Prisma.sql`
+        UPDATE public.run_ra
+        SET status = ${toCode}, updated_at = now()
+        WHERE id = ${runRaId}::uuid
+      `);
+    });
   }
 }

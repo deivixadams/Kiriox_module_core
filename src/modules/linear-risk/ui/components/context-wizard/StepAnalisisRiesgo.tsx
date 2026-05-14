@@ -1,8 +1,9 @@
 'use client';
+/* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useEffect, useState } from 'react';
-import { BarChart3, ClipboardList, Info, Plus, Trash2, Edit2, AlertCircle } from 'lucide-react';
-import { CARD, INPUT_S, LoaderSection, ErrorAlert } from './ContextWizardShared';
+import { BarChart3, ClipboardList, Info, Plus } from 'lucide-react';
+import { CARD, ErrorAlert, extractError, INPUT_S, LABEL_S, LoaderSection, SaveButton, SECTION_HDR, TEXTAREA_S } from './ContextWizardShared';
 
 type AnalysisItem = {
   id: string;
@@ -24,7 +25,6 @@ type AnalysisItem = {
   peso_value?: number | null;
   control_ids: string[];
 };
-
 type AnalysisMeta = {
   run_ra_id: string;
   run_ra_code: string;
@@ -35,7 +35,6 @@ type AnalysisMeta = {
   appetite_tolerance_min: number | null;
   appetite_tolerance_max: number | null;
 };
-
 type AnalysisCatalogs = {
   impacts: Array<{ id: string; name: string; description: string | null; ordinal: number | null; numeric_value: number }>;
   probabilities: Array<{ id: string; name: string; description: string | null; ordinal: number | null; numeric_value: number }>;
@@ -46,7 +45,6 @@ type AnalysisCatalogs = {
   categories: Array<{ id: string; name: string }>;
   objectives: Array<{ id: string; name: string }>;
 };
-
 type AnalysisForm = {
   id?: string;
   name: string;
@@ -57,7 +55,6 @@ type AnalysisForm = {
   consequence: string;
   objective_id: string;
   activity_id: string;
-  owner_id: string;
   impact_id: string;
   probability_id: string;
   peso_id: string;
@@ -73,313 +70,436 @@ const ANALYSIS_EMPTY: AnalysisForm = {
   consequence: '',
   objective_id: '',
   activity_id: '',
-  owner_id: '',
   impact_id: '',
   probability_id: '',
   peso_id: '',
   control_ids: [],
 };
 
+function objectiveBadgeColor(text: string) {
+  const k = (text || '').toLowerCase();
+  if (k.includes('oper')) return { bg: 'rgba(14,165,233,0.16)', bd: 'rgba(56,189,248,0.4)', tx: '#67e8f9' };
+  if (k.includes('cumpli')) return { bg: 'rgba(168,85,247,0.16)', bd: 'rgba(196,181,253,0.4)', tx: '#c4b5fd' };
+  if (k.includes('info')) return { bg: 'rgba(16,185,129,0.16)', bd: 'rgba(52,211,153,0.4)', tx: '#6ee7b7' };
+  return { bg: 'rgba(100,116,139,0.18)', bd: 'rgba(148,163,184,0.35)', tx: '#94a3b8' };
+}
+
+function scoreBadge(value: number | null, kind: 'impact' | 'probability') {
+  const v = Number(value || 0);
+  if (v >= 4) return { label: kind === 'impact' ? 'Alto' : 'Alta', color: '#f87171' };
+  if (v >= 3) return { label: 'Medio', color: '#fbbf24' };
+  if (v >= 1) return { label: kind === 'impact' ? 'Bajo' : 'Baja', color: '#34d399' };
+  return { label: '-', color: '#64748b' };
+}
+
 export function StepAnalisisRiesgo({ runRaId }: { runRaId: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<AnalysisItem[]>([]);
-  const [meta, setMeta] = useState<AnalysisMeta | null>(null);
-  const [catalogs, setCatalogs] = useState<AnalysisCatalogs | null>(null);
+  const [meta, setMeta] = useState<AnalysisMeta>({
+    run_ra_id: runRaId,
+    run_ra_code: '',
+    evaluated_process: '',
+    responsible_person: '',
+    evaluated_activity: '',
+    risk_appetite: '',
+    appetite_tolerance_min: null,
+    appetite_tolerance_max: null,
+  });
+  const [catalogs, setCatalogs] = useState<AnalysisCatalogs>({
+    impacts: [],
+    probabilities: [],
+    pesos: [],
+    activities: [],
+    owners: [],
+    controls: [],
+    categories: [],
+    objectives: [],
+  });
   const [form, setForm] = useState<AnalysisForm>(ANALYSIS_EMPTY);
 
   async function load() {
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(`/api/linear-risk/analysis-risks?runRaId=${encodeURIComponent(runRaId)}`, { cache: 'no-store' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al cargar');
-      setItems(data.items || []);
-      setMeta(data.meta);
-      setCatalogs(data.catalogs);
-      
-      // Default selections
-      if (data.catalogs) {
-        setForm(f => ({
-          ...f,
-          impact_id: f.impact_id || data.catalogs.impacts[0]?.id || '',
-          probability_id: f.probability_id || data.catalogs.probabilities[0]?.id || '',
-          peso_id: f.peso_id || data.catalogs.pesos[0]?.id || '',
-          activity_id: f.activity_id || data.catalogs.activities[0]?.id || '',
-          owner_id: f.owner_id || data.catalogs.owners[0]?.id || '',
-        }));
-      }
-    } catch (e: any) {
-      setError(e.message);
+      const res = await fetch(`/api/linear-risk/analysis-risks?runRaId=${encodeURIComponent(runRaId)}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      const data = await res.json() as { items: AnalysisItem[]; catalogs: AnalysisCatalogs; meta?: AnalysisMeta; error?: string };
+      if (res.status === 401) throw new Error('Sesión expirada. Inicie sesión nuevamente.');
+      if (!res.ok) throw new Error(extractError(data, `HTTP ${res.status}`));
+      setItems(data.items ?? []);
+      setCatalogs(data.catalogs ?? { impacts: [], probabilities: [], pesos: [], activities: [], owners: [], controls: [], categories: [], objectives: [] });
+      setMeta(data.meta ?? {
+        run_ra_id: runRaId,
+        run_ra_code: '',
+        evaluated_process: '',
+        responsible_person: '',
+        evaluated_activity: '',
+        risk_appetite: '',
+        appetite_tolerance_min: null,
+        appetite_tolerance_max: null,
+      });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo cargar el paso de análisis.');
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, [runRaId]);
+  useEffect(() => { void load(); }, [runRaId]);
+
+  useEffect(() => {
+    if (catalogs.activities.length > 0 && meta.evaluated_activity) {
+      const byName = catalogs.activities.find((a) => a.name === meta.evaluated_activity);
+      if (byName) setForm((f) => ({ ...f, activity_id: byName.id }));
+    }
+  }, [catalogs.activities]);
+
+  useEffect(() => {
+    setForm((f) => ({
+      ...(f.id ? f : {}),
+      ...f,
+      impact_id: f.id ? f.impact_id : (f.impact_id || catalogs.impacts[0]?.id || ''),
+      probability_id: f.id ? f.probability_id : (f.probability_id || catalogs.probabilities[0]?.id || ''),
+      peso_id: f.id ? f.peso_id : (f.peso_id || catalogs.pesos[0]?.id || ''),
+    }));
+  }, [catalogs.impacts, catalogs.probabilities, catalogs.pesos]);
 
   async function handleSave() {
-    if (!form.name || !form.cause || !form.event || !form.objective_id) {
-      alert('Por favor complete los campos obligatorios (Nombre, Causa, Evento, Objetivo)');
-      return;
-    }
     setSaving(true);
+    setError(null);
     try {
+      const isEditing = Boolean(form.id);
+      const derivedName = form.name?.trim() || form.event?.trim() || form.cause?.trim() || 'Riesgo sin título';
+      const derivedDescription = form.description?.trim() || `${form.cause || ''} ${form.event || ''}`.trim() || 'Sin descripción';
       const res = await fetch('/api/linear-risk/analysis-risks', {
         method: 'POST',
+        credentials: 'include',
+        cache: 'no-store',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ runRaId, ...form }),
+        body: JSON.stringify({ runRaId, ...form, name: derivedName, description: derivedDescription }),
       });
-      if (!res.ok) throw new Error('Error al guardar');
-      setForm(ANALYSIS_EMPTY);
-      load();
-    } catch (e: any) {
-      alert(e.message);
+      const data = await res.json() as { error?: string };
+      if (res.status === 401) throw new Error('Sesión expirada. Inicie sesión nuevamente.');
+      if (!res.ok) throw new Error(extractError(data, `HTTP ${res.status}`));
+      if (isEditing) {
+        setForm((f) => ({ ...f, id: undefined }));
+      } else {
+        setForm(ANALYSIS_EMPTY);
+      }
+      await load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo guardar el riesgo.');
     } finally {
       setSaving(false);
     }
   }
 
   async function handleRemove(id: string) {
-    if (!window.confirm('¿Eliminar este riesgo?')) return;
     try {
-      const res = await fetch(`/api/linear-risk/analysis-risks?runRaId=${encodeURIComponent(runRaId)}&id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Error al eliminar');
-      load();
-    } catch (e: any) {
-      alert(e.message);
+      const res = await fetch(`/api/linear-risk/analysis-risks?runRaId=${encodeURIComponent(runRaId)}&id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      const data = await res.json() as { error?: string };
+      if (res.status === 401) throw new Error('Sesión expirada. Inicie sesión nuevamente.');
+      if (!res.ok) throw new Error(extractError(data, `HTTP ${res.status}`));
+      await load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se pudo remover.');
     }
   }
 
-  function handleEdit(it: AnalysisItem) {
+  function handleEdit(item: AnalysisItem) {
+    const impactMatch = catalogs.impacts.find((i) => Number(i.numeric_value) === Number(item.impact_score ?? NaN));
+    const probabilityMatch = catalogs.probabilities.find((p) => Number(p.numeric_value) === Number(item.probability_score ?? NaN));
     setForm({
-      id: it.id,
-      name: it.name,
-      description: it.description || '',
-      risk_category: it.risk_category_id || '',
-      cause: it.cause,
-      event: it.event,
-      consequence: it.consequence,
-      objective_id: it.objective_id || '',
-      activity_id: it.activity_id,
-      owner_id: it.owner_id,
-      impact_id: catalogs?.impacts.find(i => i.numeric_value === it.impact_score)?.id || '',
-      probability_id: catalogs?.probabilities.find(p => p.numeric_value === it.probability_score)?.id || '',
-      peso_id: it.peso_id || '',
-      control_ids: it.control_ids,
+      id: item.id,
+      name: item.name ?? '',
+      description: item.description ?? '',
+      risk_category: item.risk_category_id ?? '',
+      cause: item.cause ?? '',
+      event: item.event ?? '',
+      consequence: item.consequence ?? '',
+      objective_id: item.objective_id ?? '',
+      activity_id: item.activity_id ?? '',
+      impact_id: impactMatch?.id ?? '',
+      probability_id: probabilityMatch?.id ?? '',
+      peso_id: item.peso_id ?? '',
+      control_ids: item.control_ids ?? [],
     });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   if (loading) return <LoaderSection />;
-  if (!catalogs || !meta) return <ErrorAlert message="No se pudo cargar la configuración de análisis." />;
 
-  const totalInherente = items.reduce((acc, it) => acc + (it.inherent_risk_score || 0), 0);
-  const appetiteLabel = String(meta.risk_appetite || 'No definido').replace(/_/g, ' ').toUpperCase();
+  const objectiveBadgeColor = (value: string) => {
+    const v = value.toLowerCase();
+    if (v.includes('oper')) return { bg: 'rgba(14,165,233,0.16)', bd: 'rgba(14,165,233,0.4)', tx: '#38bdf8' };
+    if (v.includes('info')) return { bg: 'rgba(16,185,129,0.16)', bd: 'rgba(16,185,129,0.4)', tx: '#34d399' };
+    if (v.includes('cumpl')) return { bg: 'rgba(168,85,247,0.16)', bd: 'rgba(168,85,247,0.4)', tx: '#c084fc' };
+    return { bg: 'rgba(100,116,139,0.16)', bd: 'rgba(100,116,139,0.35)', tx: '#94a3b8' };
+  };
+
+  const scoreBadge = (score: number | null, type: 'impact' | 'probability') => {
+    if (score == null) return { label: '-', color: '#64748b' };
+    if (type === 'impact') {
+      if (score >= 4) return { label: 'Alto', color: '#ef4444' };
+      if (score >= 3) return { label: 'Medio', color: '#f59e0b' };
+      return { label: 'Bajo', color: '#10b981' };
+    }
+    if (score >= 4) return { label: 'Alta', color: '#ef4444' };
+    if (score >= 3) return { label: 'Media', color: '#f59e0b' };
+    return { label: 'Baja', color: '#10b981' };
+  };
+
+  const impactOptions = [...catalogs.impacts].sort((a, b) => Number(a.numeric_value) - Number(b.numeric_value));
+  const probabilityOptions = [...catalogs.probabilities].sort((a, b) => Number(a.numeric_value) - Number(b.numeric_value));
+  const pesoOptions = [...catalogs.pesos].sort((a, b) => Number(a.peso) - Number(b.peso));
+  const appetiteLabel = meta.risk_appetite
+    ? String(meta.risk_appetite).replaceAll('_', ' ').toUpperCase()
+    : 'No definido';
+  const appetiteRange =
+    meta.appetite_tolerance_min != null || meta.appetite_tolerance_max != null
+      ? ` (${meta.appetite_tolerance_min ?? '-'}% - ${meta.appetite_tolerance_max ?? '-'}%)`
+      : '';
+
+  const pesoIndex = Math.max(0, pesoOptions.findIndex((x) => x.id === form.peso_id));
+
+  const impactCurrent = impactOptions.find((x) => x.id === form.impact_id);
+  const probabilityCurrent = probabilityOptions.find((x) => x.id === form.probability_id);
+  const pesoCurrent = pesoOptions[pesoIndex];
+
+  const pesoNumeric = Number(pesoCurrent?.peso ?? 0);
+  const setPesoByPosition = (position: number) => {
+    const idx = Math.max(0, Math.min(pesoOptions.length - 1, position - 1));
+    const match = pesoOptions[idx];
+    if (match) setForm((f) => ({ ...f, peso_id: match.id }));
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* FORM SECTION */}
-      <div style={{ 
-        ...CARD, 
-        padding: '1.5rem',
-        border: '1px solid rgba(56,189,248,0.2)',
-        background: 'linear-gradient(135deg, rgba(15,23,42,0.6), rgba(8,18,45,0.8))'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
+      <div style={{ ...CARD, border: '1px solid rgba(56,189,248,0.28)', background: 'linear-gradient(135deg, rgba(8,30,72,0.72), rgba(8,18,51,0.96) 52%, rgba(8,12,40,0.98))', width: '100%', padding: '1.2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.8rem', marginBottom: '0.9rem' }}>
           <div>
-            <h3 style={{ margin: 0, color: '#7dd3fc', fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <BarChart3 size={18} /> Identificación y Análisis de Riesgos
-            </h3>
-            <p style={{ margin: '0.3rem 0 0 0', color: '#94a3b8', fontSize: '0.8rem' }}>
-              Registre los riesgos identificados para la actividad seleccionada.
-            </p>
+            <p style={{ ...SECTION_HDR, color: '#7dd3fc', marginBottom: '0.2rem', fontSize: '1.05rem', textTransform: 'uppercase', letterSpacing: '0.02em' }}><BarChart3 size={16} /> Análisis de riesgo</p>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.74rem' }}>Capture el riesgo en formato de grilla y agréguelo al listado.</p>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-             <span style={{ fontSize: '0.7rem', color: '#34d399', background: 'rgba(52,211,153,0.1)', padding: '0.2rem 0.6rem', borderRadius: 999, border: '1px solid rgba(52,211,153,0.2)' }}>
-               {meta.evaluated_activity || 'Sin actividad'}
-             </span>
-             <span style={{ fontSize: '0.7rem', color: '#fb7185', background: 'rgba(251,113,133,0.1)', padding: '0.2rem 0.6rem', borderRadius: 999, border: '1px solid rgba(251,113,133,0.2)' }}>
-               Apetito: {appetiteLabel}
-             </span>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
+            <span style={{ fontSize: '0.68rem', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 999, padding: '0.18rem 0.58rem', background: 'rgba(37,99,235,0.10)', fontWeight: 700 }}>
+              Actividad: {meta.evaluated_activity || 'No definida'}
+            </span>
+            <span style={{ fontSize: '0.68rem', color: '#c4b5fd', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 999, padding: '0.18rem 0.58rem', background: 'rgba(124,58,237,0.10)', fontWeight: 700 }}>
+              Responsable: {meta.responsible_person || 'No definido'}
+            </span>
+            <span style={{ fontSize: '0.68rem', color: '#34d399', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 999, padding: '0.18rem 0.58rem', background: 'rgba(16,185,129,0.10)', fontWeight: 700 }}>
+              Apetito: {`${appetiteLabel}${appetiteRange}`}
+            </span>
           </div>
         </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1.5rem' }}>
-          {/* LEFT COL: IDENTIFICATION */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.8rem' }}>
-               <input style={INPUT_S} placeholder="Nombre del riesgo *" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-               <textarea style={{...INPUT_S, minHeight: 60}} placeholder="Descripción" value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
-               <input style={INPUT_S} placeholder="Causa *" value={form.cause} onChange={e => setForm({...form, cause: e.target.value})} />
-               <input style={INPUT_S} placeholder="Evento *" value={form.event} onChange={e => setForm({...form, event: e.target.value})} />
-               <input style={INPUT_S} placeholder="Consecuencia" value={form.consequence} onChange={e => setForm({...form, consequence: e.target.value})} />
-               <select style={INPUT_S} value={form.objective_id} onChange={e => setForm({...form, objective_id: e.target.value})}>
-                 <option value="">Objetivo afectado *</option>
-                 {catalogs.objectives.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-               </select>
-               <select style={INPUT_S} value={form.risk_category} onChange={e => setForm({...form, risk_category: e.target.value})}>
-                 <option value="">Categoría</option>
-                 {catalogs.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-               </select>
-               <select style={INPUT_S} value={form.owner_id} onChange={e => setForm({...form, owner_id: e.target.value})}>
-                 <option value="">Propietario</option>
-                 {catalogs.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-               </select>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.6rem', marginBottom: '0.75rem' }}>
+          <input
+            style={{ ...INPUT_S, fontSize: '0.74rem', width: '100%' }}
+            placeholder="Descripción del riesgo"
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+          />
+        </div>
+        {error && <ErrorAlert message={error} />}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '0.8rem', alignItems: 'stretch' }}>
+          <div style={{ border: '1px solid rgba(125,211,252,0.18)', borderRadius: 14, padding: '0.8rem', background: 'rgba(13,23,56,0.5)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
+              <input
+                style={{ ...INPUT_S, fontSize: '0.72rem', gridColumn: '1 / span 2' }}
+                placeholder="Nombre del riesgo"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              />
+              <input style={{ ...INPUT_S, fontSize: '0.72rem' }} placeholder="Causa" value={form.cause} onChange={(e) => setForm((f) => ({ ...f, cause: e.target.value }))} />
+              <input style={{ ...INPUT_S, fontSize: '0.72rem' }} placeholder="Evento" value={form.event} onChange={(e) => setForm((f) => ({ ...f, event: e.target.value }))} />
+              <input style={{ ...INPUT_S, fontSize: '0.72rem' }} placeholder="Consecuencia" value={form.consequence} onChange={(e) => setForm((f) => ({ ...f, consequence: e.target.value }))} />
+              <select style={{ ...INPUT_S, fontSize: '0.72rem' }} value={form.objective_id} onChange={(e) => setForm((f) => ({ ...f, objective_id: e.target.value }))}>
+                <option value="">Objetivo afectado</option>
+                {catalogs.objectives.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              <select style={{ ...INPUT_S, fontSize: '0.72rem', gridColumn: '1 / span 2' }} value={form.risk_category} onChange={(e) => setForm((f) => ({ ...f, risk_category: e.target.value }))}>
+                <option value="">Categoría</option>
+                {catalogs.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
             </div>
           </div>
-
-          {/* RIGHT COL: ANALYSIS */}
-          <div style={{ 
-            background: 'rgba(30,41,59,0.4)', 
-            padding: '1rem', 
-            borderRadius: 12, 
-            border: '1px solid rgba(255,255,255,0.05)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '1rem'
-          }}>
-            <h4 style={{ margin: 0, color: '#e2e8f0', fontSize: '0.85rem', fontWeight: 700 }}>Valoración Inherente</h4>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-              <label style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Impacto</label>
-              <select style={INPUT_S} value={form.impact_id} onChange={e => setForm({...form, impact_id: e.target.value})}>
-                {catalogs.impacts.map(i => <option key={i.id} value={i.id}>{i.name} ({i.numeric_value})</option>)}
-              </select>
-
-              <label style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Probabilidad</label>
-              <select style={INPUT_S} value={form.probability_id} onChange={e => setForm({...form, probability_id: e.target.value})}>
-                {catalogs.probabilities.map(p => <option key={p.id} value={p.id}>{p.name} ({p.numeric_value})</option>)}
-              </select>
-
-              <label style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Peso</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '2px', background: 'rgba(255,255,255,0.05)', padding: 2, borderRadius: 8 }}>
-                {catalogs.pesos.map(p => (
-                  <button 
-                    key={p.id}
-                    onClick={() => setForm({...form, peso_id: p.id})}
-                    style={{
-                      border: 'none',
-                      padding: '0.4rem',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      background: form.peso_id === p.id ? '#3b82f6' : 'transparent',
-                      color: form.peso_id === p.id ? '#fff' : '#64748b',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {p.peso}
-                  </button>
-                ))}
+          <div style={{ border: '1px solid rgba(167,139,250,0.22)', borderRadius: 14, padding: '0.8rem', background: 'rgba(34,19,62,0.35)' }}>
+            <p style={{ margin: '0 0 0.6rem 0', color: '#e2e8f0', fontWeight: 700 }}>Evaluación del riesgo</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.6rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '0.45rem', alignItems: 'center', border: '1px solid rgba(148,163,184,0.2)', borderRadius: 10, padding: '0.4rem 0.5rem' }}>
+                <span style={{ color: '#e2e8f0', fontSize: '0.75rem', fontWeight: 700 }}>Impacto</span>
+                <select
+                  style={{ ...INPUT_S, fontSize: '0.72rem', paddingTop: '0.45rem', paddingBottom: '0.45rem' }}
+                  value={form.impact_id}
+                  onChange={(e) => setForm((f) => ({ ...f, impact_id: e.target.value }))}
+                >
+                  <option value="">Seleccione impacto</option>
+                  {impactOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {`${opt.name} | ${opt.description ?? '-'} | ${opt.ordinal ?? '-'}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '110px 1fr', gap: '0.45rem', alignItems: 'center', border: '1px solid rgba(148,163,184,0.2)', borderRadius: 10, padding: '0.4rem 0.5rem' }}>
+                <span style={{ color: '#e2e8f0', fontSize: '0.75rem', fontWeight: 700 }}>Probabilidad</span>
+                <select
+                  style={{ ...INPUT_S, fontSize: '0.72rem', paddingTop: '0.45rem', paddingBottom: '0.45rem' }}
+                  value={form.probability_id}
+                  onChange={(e) => setForm((f) => ({ ...f, probability_id: e.target.value }))}
+                >
+                  <option value="">Seleccione probabilidad</option>
+                  {probabilityOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {`${opt.name} | ${opt.description ?? '-'} | ${opt.ordinal ?? '-'}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 6 }}>
+                <span style={{ color: '#e2e8f0', fontSize: '0.74rem', fontWeight: 700 }}>Peso del riesgo</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'rgba(59,130,246,0.18)', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(59,130,246,0.28)' }}>
+                  {[1, 2, 3, 4].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setPesoByPosition(v)}
+                      style={{
+                        border: 'none',
+                        background: pesoNumeric === v ? 'linear-gradient(95deg,#7c3aed,#6366f1)' : 'rgba(15,23,42,0.7)',
+                        color: pesoNumeric === v ? '#fff' : '#cbd5e1',
+                        padding: '0.42rem 0.2rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-
-            {/* CONTROLS SELECTION */}
-            <div style={{ marginTop: '0.5rem' }}>
-               <label style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600 }}>Controles Existentes (Mitigantes)</label>
-               <div style={{ 
-                 maxHeight: 100, overflowY: 'auto', background: 'rgba(0,0,0,0.2)', 
-                 borderRadius: 8, marginTop: '0.4rem', padding: '0.4rem',
-                 border: '1px solid rgba(255,255,255,0.05)'
-               }}>
-                 {catalogs.controls.length === 0 && <div style={{ fontSize: '0.7rem', color: '#475569', padding: '0.4rem' }}>No hay controles definidos.</div>}
-                 {catalogs.controls.map(c => (
-                   <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.3rem', cursor: 'pointer', fontSize: '0.7rem', color: '#cbd5e1' }}>
-                     <input 
-                       type="checkbox" 
-                       checked={form.control_ids.includes(c.id)}
-                       onChange={e => {
-                         const ids = e.target.checked ? [...form.control_ids, c.id] : form.control_ids.filter(x => x !== c.id);
-                         setForm({...form, control_ids: ids});
-                       }}
-                     />
-                     {c.name}
-                   </label>
-                 ))}
-               </div>
-            </div>
           </div>
         </div>
-
-        <button 
+        <button
           onClick={handleSave}
           disabled={saving}
           style={{
-            marginTop: '1.5rem', width: '100%', padding: '0.8rem', borderRadius: 10,
-            background: 'linear-gradient(90deg, #3b82f6, #2563eb)', color: '#fff',
-            border: 'none', fontWeight: 700, fontSize: '0.9rem', cursor: saving ? 'wait' : 'pointer',
-            boxShadow: '0 4px 12px rgba(37,99,235,0.2)'
+            marginTop: '0.9rem',
+            width: '100%',
+            borderRadius: 14,
+            border: '1px solid rgba(129,140,248,0.42)',
+            background: 'linear-gradient(95deg, #6d28d9, #2563eb)',
+            color: '#fff',
+            fontWeight: 800,
+            fontSize: '1rem',
+            cursor: saving ? 'wait' : 'pointer',
+            padding: '0.95rem 1rem',
           }}
         >
-          {saving ? 'Guardando...' : form.id ? 'Actualizar Riesgo' : 'Agregar Riesgo al Listado'}
+          {saving ? 'Agregando al listado...' : 'Agregar al listado'}
         </button>
       </div>
-
-      {/* LIST SECTION */}
-      <div style={{ ...CARD, padding: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.2rem' }}>
+      <div style={{
+        ...CARD,
+        border: '1px solid rgba(167,139,250,0.3)',
+        background: 'linear-gradient(145deg, rgba(99,102,241,0.16), rgba(7,16,42,0.93))',
+        padding: '1rem',
+        width: '100%',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.8rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
           <div>
-            <h3 style={{ margin: 0, color: '#e2e8f0', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <ClipboardList size={18} /> Riesgos Registrados
-            </h3>
+            <p style={{ ...SECTION_HDR, color: '#c4b5fd', marginBottom: '0.3rem', fontSize: '0.92rem' }}><ClipboardList size={14} /> Riesgos registrados</p>
+            <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.88rem' }}>Listado de riesgos registrados en este paso.</p>
           </div>
-          <div style={{ 
-            textAlign: 'right', background: 'rgba(251,113,133,0.05)', 
-            padding: '0.6rem 1rem', borderRadius: 12, border: '1px solid rgba(251,113,133,0.1)' 
-          }}>
-            <div style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Carga Inherente Total</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#fb7185' }}>{totalInherente.toFixed(2)}</div>
-          </div>
+          {(() => {
+            const totalInherente = items.reduce((acc, it) => acc + Number(it.inherent_risk_score ?? 0), 0);
+            const appetiteLabel = String(meta.risk_appetite || 'No definido').replaceAll('_', ' ').toUpperCase();
+            const toleranceMax = meta.appetite_tolerance_max ?? 200;
+            const ringFillPct = Math.max(0, Math.min(100, (totalInherente / toleranceMax) * 100));
+            const ringAngle = Math.max(0, Math.min(360, Math.round((ringFillPct / 100) * 360)));
+            return (
+              <div style={{ width: 420, marginTop: '-0.2rem', border: '1px solid rgba(129,140,248,0.28)', borderRadius: 14, padding: '0.8rem 0.9rem', background: 'linear-gradient(160deg, rgba(19,35,74,0.94), rgba(10,22,54,0.92))', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div>
+                  <div style={{ color: '#fb7185', fontSize: '2rem', fontWeight: 900, lineHeight: 1 }}>{appetiteLabel}</div>
+                  <div style={{ color: '#cbd5e1', fontSize: '0.95rem', fontWeight: 800, marginTop: 8 }}>APETITO DE RIESGO</div>
+                  {(meta.appetite_tolerance_min != null || meta.appetite_tolerance_max != null) && (
+                    <div style={{ color: '#93c5fd', fontSize: '0.82rem', fontWeight: 700, marginTop: 6 }}>
+                      {meta.appetite_tolerance_min ?? '-'}% - {meta.appetite_tolerance_max ?? '-'}%
+                    </div>
+                  )}
+                </div>
+                <div style={{ position: 'relative', width: 98, height: 98, flexShrink: 0 }}>
+                  <div style={{ width: 98, height: 98, borderRadius: '50%', background: `conic-gradient(#fb7185 ${ringAngle}deg, rgba(148,163,184,0.22) 0deg)`, padding: 8, boxSizing: 'border-box' }}>
+                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'rgba(9,18,45,0.98)', border: '1px solid rgba(148,163,184,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+                      <div style={{ color: '#c4b5fd', fontSize: '1.7rem', fontWeight: 900, lineHeight: 1 }}>{Number(totalInherente.toFixed(1))}</div>
+                      <div style={{ color: '#94a3b8', fontSize: '0.48rem', fontWeight: 700, textAlign: 'center', letterSpacing: '0.05em' }}>TOTAL RIESGO INHERENTE</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
-
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem', color: '#cbd5e1' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#94a3b8' }}>
-                <th style={{ textAlign: 'left', padding: '0.8rem' }}>Riesgo / Causa</th>
-                <th style={{ textAlign: 'left', padding: '0.8rem' }}>Evento</th>
-                <th style={{ textAlign: 'left', padding: '0.8rem' }}>Categoría</th>
-                <th style={{ textAlign: 'center', padding: '0.8rem' }}>Impacto</th>
-                <th style={{ textAlign: 'center', padding: '0.8rem' }}>Prob.</th>
-                <th style={{ textAlign: 'center', padding: '0.8rem' }}>Peso</th>
-                <th style={{ textAlign: 'center', padding: '0.8rem' }}>Inherente</th>
-                <th style={{ textAlign: 'right', padding: '0.8rem' }}>Acciones</th>
+              <tr style={{ borderBottom: '1px solid rgba(196,181,253,0.25)' }}>
+                {['Nombre', 'Categoría', 'Causa', 'Evento', 'Consecuencia', 'Objetivo afectado', 'Actividad', 'Propietario', 'Impacto', 'Probabilidad', 'Peso', 'Inherente', 'Acciones'].map((h) => (
+                  <th key={h} style={{ textAlign: 'left', padding: '0.55rem 0.45rem', color: '#a5b4fc', fontWeight: 700 }}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody style={{ color: '#cbd5e1' }}>
+            <tbody>
               {items.length === 0 && (
-                <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '3rem', color: '#475569' }}>
-                    No se han registrado riesgos para esta evaluación.
-                  </td>
-                </tr>
+                <tr><td colSpan={13} style={{ padding: '0.8rem', color: '#64748b' }}>Sin riesgos registrados en este paso.</td></tr>
               )}
-              {items.map(it => (
-                <tr key={it.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                  <td style={{ padding: '0.8rem' }}>
-                    <div style={{ fontWeight: 700, color: '#f1f5f9' }}>{it.name}</div>
-                    <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.2rem' }}>Causa: {it.cause}</div>
+              {items.map((it) => (
+                <tr key={it.id} style={{ borderBottom: '1px solid rgba(148,163,184,0.12)' }}>
+                  <td style={{ padding: '0.5rem 0.45rem', fontWeight: 700, color: '#e2e8f0', maxWidth: 160, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={it.name}>{it.name || '-'}</td>
+                  <td style={{ padding: '0.5rem 0.45rem' }}>
+                    {it.risk_category
+                      ? <span style={{ background: 'rgba(100,116,139,0.18)', border: '1px solid rgba(100,116,139,0.35)', color: '#94a3b8', borderRadius: 999, padding: '0.12rem 0.45rem', fontSize: '0.68rem' }}>{it.risk_category}</span>
+                      : <span style={{ color: '#475569' }}>—</span>}
                   </td>
-                  <td style={{ padding: '0.8rem' }}>{it.event}</td>
-                  <td style={{ padding: '0.8rem' }}>
-                    <span style={{ fontSize: '0.7rem', background: 'rgba(255,255,255,0.05)', padding: '0.1rem 0.4rem', borderRadius: 4 }}>
-                      {it.risk_category || 'General'}
-                    </span>
+                  <td style={{ padding: '0.5rem 0.45rem' }}>{it.cause}</td>
+                  <td style={{ padding: '0.5rem 0.45rem' }}>{it.event}</td>
+                  <td style={{ padding: '0.5rem 0.45rem' }}>{it.consequence}</td>
+                  <td style={{ padding: '0.5rem 0.45rem' }}>
+                    {(() => {
+                      const c = objectiveBadgeColor(it.affected_objective || '');
+                      return <span style={{ background: c.bg, border: `1px solid ${c.bd}`, color: c.tx, borderRadius: 999, padding: '0.14rem 0.48rem', fontSize: '0.68rem' }}>{it.affected_objective || '-'}</span>;
+                    })()}
                   </td>
-                  <td style={{ padding: '0.8rem', textAlign: 'center' }}>{it.impact_score}</td>
-                  <td style={{ padding: '0.8rem', textAlign: 'center' }}>{it.probability_score}</td>
-                  <td style={{ padding: '0.8rem', textAlign: 'center' }}>{it.peso_value}</td>
-                  <td style={{ padding: '0.8rem', textAlign: 'center', fontWeight: 800, color: '#3b82f6' }}>{it.inherent_risk_score}</td>
-                  <td style={{ padding: '0.8rem', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                      <button onClick={() => handleEdit(it)} style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer' }}><Edit2 size={14} /></button>
-                      <button onClick={() => handleRemove(it.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={14} /></button>
-                    </div>
+                  <td style={{ padding: '0.5rem 0.45rem' }}>{catalogs.activities.find((a) => a.id === it.activity_id)?.name || '-'}</td>
+                  <td style={{ padding: '0.5rem 0.45rem' }}>{catalogs.owners.find((o) => o.id === it.owner_id)?.name || meta.responsible_person || '-'}</td>
+                  <td style={{ padding: '0.5rem 0.45rem' }}>
+                    {(() => {
+                      const b = scoreBadge(it.impact_score, 'impact');
+                      return <span style={{ color: b.color, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: b.color, display: 'inline-block' }} />{b.label} ({it.impact_score ?? '-'})</span>;
+                    })()}
+                  </td>
+                  <td style={{ padding: '0.5rem 0.45rem' }}>
+                    {(() => {
+                      const b = scoreBadge(it.probability_score, 'probability');
+                      return <span style={{ color: b.color, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: b.color, display: 'inline-block' }} />{b.label} ({it.probability_score ?? '-'})</span>;
+                    })()}
+                  </td>
+                  <td style={{ padding: '0.5rem 0.45rem' }}>{it.peso_value ?? '-'}</td>
+                  <td style={{ padding: '0.5rem 0.45rem', color: '#93c5fd', fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {it.inherent_risk_score ?? '-'}
+                  </td>
+                  <td style={{ padding: '0.5rem 0.45rem', whiteSpace: 'nowrap' }}>
+                    <button type="button" onClick={() => handleEdit(it)} style={{ marginRight: 6, borderRadius: 8, border: '1px solid rgba(59,130,246,0.35)', background: 'rgba(37,99,235,0.15)', color: '#93c5fd', padding: '0.22rem 0.5rem', fontSize: '0.68rem', cursor: 'pointer' }}>✎</button>
+                    <button type="button" onClick={() => void handleRemove(it.id)} style={{ borderRadius: 8, border: '1px solid rgba(239,68,68,0.35)', background: 'rgba(185,28,28,0.16)', color: '#fca5a5', padding: '0.22rem 0.5rem', fontSize: '0.68rem', cursor: 'pointer' }}>🗑</button>
                   </td>
                 </tr>
               ))}
@@ -390,3 +510,4 @@ export function StepAnalisisRiesgo({ runRaId }: { runRaId: string }) {
     </div>
   );
 }
+

@@ -8,6 +8,18 @@ import {
   ChevronLeft, ChevronsLeft, ChevronsRight, X,
   Shield, TrendingUp, Trash2, Layers3, FlaskConical, Users,
 } from 'lucide-react';
+import { AiFieldAssist } from '@/shared/ai';
+import type { AiFieldContract } from '@/shared/ai';
+
+const OBJECTIVE_DESCRIPTION_CONTRACT: AiFieldContract = {
+  module: 'company',
+  field: 'objective_description',
+  intent: 'complete',
+  minWords: 10,
+  maxWords: 50,
+  tone: 'ejecutivo',
+  output: 'text',
+};
 
 
 type CompanyRecord = {
@@ -731,6 +743,13 @@ export function CompanyEditorPage() {
                       onFocus={e => e.currentTarget.style.borderColor = 'rgba(59,130,246,0.4)'}
                       onBlur={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)'}
                     />
+                    <div style={{ marginTop: 6 }}>
+                      <AiFieldAssist
+                        contract={OBJECTIVE_DESCRIPTION_CONTRACT}
+                        currentValue={drawerForm.objective_description || drawerForm.objective_name}
+                        onAccept={(value) => setDrawerForm(p => p && ({ ...p, objective_description: value }))}
+                      />
+                    </div>
                   </div>
                   <div>
                     <FieldLabel>KPI</FieldLabel>

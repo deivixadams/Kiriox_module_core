@@ -7,7 +7,8 @@ export type KirioxOfficialModuleId =
   | "structural-risk"
   | "simulation"
   | "catalog"
-  | "company";
+  | "company"
+  | "reportes";
 
 export type KirioxModuleStatus =
   | "active"

@@ -31,9 +31,15 @@ function StepPlaceholder({ step }: { step: typeof STEPS[number] }) {
           {step.desc}
         </p>
         <p style={{ margin: '0.5rem 0 0', fontSize: '0.75rem', color: '#3b4a6b', maxWidth: 360 }}>
-          Estamos migrando este componente. Por favor, espere.
+          Completa las etapas anteriores para habilitar este módulo.
         </p>
       </div>
+      <span style={{
+        fontSize: '0.7rem', fontWeight: 700, padding: '0.28rem 0.85rem', borderRadius: 999,
+        background: 'rgba(100,116,139,0.08)', border: '1px solid rgba(100,116,139,0.18)', color: '#475569',
+      }}>
+        Disponible en la siguiente fase
+      </span>
     </div>
   );
 }
@@ -56,33 +62,57 @@ export function EvaluationWizard({ runRaId, runRaCode, onExit }: {
     async function loadMeta() {
       try {
         const gcRes = await fetch(`/api/linear-risk/general-context?runRaId=${encodeURIComponent(runRaId)}`, { cache: 'no-store' });
-        const gcData = await gcRes.json();
+        const gcData = await gcRes.json() as {
+          context?: { objeto_evaluado?: string; element_id?: string; activity_id?: string } | null;
+          elements?: Array<{ id: string; name: string }>;
+          activities?: Array<{ id: string; name: string }>;
+        };
         const selectedElementId = String(gcData?.context?.element_id ?? '').trim();
-        const processName = gcData.elements?.find((e: any) => e.id === selectedElementId)?.name?.trim() || '';
-        const processFromStep1 = processName || String(gcData?.context?.objeto_evaluado ?? '').trim();
+        const selectedActivityId = String(gcData?.context?.activity_id ?? '').trim();
+        const processName = gcData.elements?.find((e) => e.id === selectedElementId)?.name?.trim() || '';
+        const activityName = gcData.activities?.find((a) => a.id === selectedActivityId)?.name?.trim() || '';
+        const processFromStep1 = processName || activityName || String(gcData?.context?.objeto_evaluado ?? '').trim();
 
         if (processFromStep1) {
           setEvaluatedProcess(processFromStep1);
+          return;
+        }
+
+        const internalRes = await fetch(`/api/linear-risk/internal-external?runRaId=${encodeURIComponent(runRaId)}&type=INTERNO`, { cache: 'no-store' });
+        const internalData = await internalRes.json() as { context?: { procesos?: string } | null };
+        const processFromInternal = String(internalData?.context?.procesos ?? '').trim();
+        if (processFromInternal) {
+          setEvaluatedProcess(processFromInternal);
+          return;
+        }
+
+        const res = await fetch(`/api/linear-risk/analysis-risks?runRaId=${encodeURIComponent(runRaId)}`, { cache: 'no-store' });
+        const data = await res.json() as { meta?: { evaluated_process?: string } };
+        const processFromMeta = String(data.meta?.evaluated_process ?? '').trim();
+        if (processFromMeta) {
+          setEvaluatedProcess(processFromMeta);
         }
       } catch (e) {
         console.error('Error loading process meta:', e);
       }
     }
-    loadMeta();
+    void loadMeta();
   }, [runRaId]);
 
   useEffect(() => {
     async function loadLifecycle() {
       try {
-        const res = await fetch(`/api/linear-risk/evaluations`, { cache: 'no-store' });
-        const data = await res.json();
-        const run = data.evaluations?.find((e: any) => e.id === runRaId);
+        const res = await fetch('/api/linear-risk/evaluations', { cache: 'no-store' });
+        const data = await res.json() as {
+          evaluations?: Array<{ id: string; progress: number; lifecycle_code?: string | null }>;
+        };
+        const run = data.evaluations?.find((e) => e.id === runRaId);
         if (run) {
-          setProgressPercent(run.progress);
-          setLifecycleCode(run.lifecycle_code || 'DRAFT');
+          setProgressPercent(Number(run.progress ?? 0));
+          setLifecycleCode(String(run.lifecycle_code ?? 'DRAFT'));
         }
       } catch {
-        // silent
+        return;
       }
     }
     void loadLifecycle();
@@ -103,17 +133,23 @@ export function EvaluationWizard({ runRaId, runRaCode, onExit }: {
   async function handleGenerateReport() {
     setGeneratingReport(true);
     try {
-      const res = await fetch(`/api/linear-risk/generate-report?runRaId=${encodeURIComponent(runRaId)}`);
-      if (!res.ok) throw new Error('Error al generar informe');
+      const res = await fetch(
+        `/api/linear-risk/generate-report?runRaId=${encodeURIComponent(runRaId)}`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as { error?: string }));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `informe_${runRaCode}.docx`;
+      a.download = `informe_${runRaCode || runRaId.slice(0, 8)}.docx`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch (e) {
-      alert('Error al generar informe');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'No se pudo generar el informe.');
     } finally {
       setGeneratingReport(false);
     }
@@ -127,29 +163,39 @@ export function EvaluationWizard({ runRaId, runRaCode, onExit }: {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: runRaId }),
       });
-      if (!res.ok) throw new Error('Error al eliminar');
+      if (!res.ok) {
+        throw new Error(`No se pudo cancelar la evaluación (HTTP ${res.status}).`);
+      }
       onExit('delete');
-    } catch (e) {
-      alert('Error al eliminar evaluación');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'No se pudo cancelar la evaluación.');
     } finally {
       setDeleting(false);
     }
   }
 
   async function handleFinalize() {
-    if (!window.confirm('¿Finalizar evaluación?')) return;
+    if (!window.confirm('¿Estás seguro de que deseas finalizar la evaluación? Esto cerrará formalmente la edición.')) return;
     setFinalizing(true);
     try {
       const res = await fetch('/api/linear-risk/run-ra', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: runRaId, to_state: 'COMPLETED' }),
+        body: JSON.stringify({
+          id: runRaId,
+          to_state: 'COMPLETED',
+        }),
       });
-      if (!res.ok) throw new Error('Error al finalizar');
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
       setLifecycleCode('COMPLETED');
-      alert('Evaluación finalizada');
-    } catch (e) {
-      alert('Error al finalizar');
+      setProgressPercent(100);
+      alert('Evaluación finalizada con éxito.');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'No se pudo finalizar la evaluación.');
     } finally {
       setFinalizing(false);
     }
@@ -193,6 +239,14 @@ export function EvaluationWizard({ runRaId, runRaCode, onExit }: {
           <code style={{ fontSize: '0.92rem', color: '#22d3ee', fontWeight: 800, fontFamily: 'monospace', letterSpacing: '0.05em' }}>
             {runRaCode || runRaId.slice(0, 16) + '…'}
           </code>
+          {step >= 2 && step <= 5 && (
+            <>
+              <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(255,255,255,0.2)' }} />
+              <span style={{ fontSize: '0.72rem', color: '#c4b5fd', fontWeight: 700 }}>
+                Proceso evaluado: {evaluatedProcess || 'No definido en paso 1'}
+              </span>
+            </>
+          )}
         </div>
 
         <span style={{ fontSize: '0.7rem', color: '#3b4a6b', fontWeight: 600, whiteSpace: 'nowrap' }}>
@@ -208,11 +262,11 @@ export function EvaluationWizard({ runRaId, runRaCode, onExit }: {
             }
           }}
           style={{
-          display: 'flex', alignItems: 'center', gap: '0.4rem',
-          padding: '0.38rem 0.8rem', borderRadius: 8,
-          background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
-          color: '#f87171', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
-        }}>
+            display: 'flex', alignItems: 'center', gap: '0.4rem',
+            padding: '0.38rem 0.8rem', borderRadius: 8,
+            background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
+            color: '#f87171', fontSize: '0.74rem', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>
           <LogOut size={13} /> Salir
         </button>
       </div>
@@ -251,12 +305,29 @@ export function EvaluationWizard({ runRaId, runRaCode, onExit }: {
         })}
       </div>
 
-      <div style={{ flex: 1, padding: '2rem', maxWidth: 1152, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-        {step === 1 && <StepContexto runRaId={runRaId} />}
-        {step === 2 && <StepAnalisisRiesgo runRaId={runRaId} />}
-        {step === 3 && <StepAnalisisControl runRaId={runRaId} />}
-        {step === 4 && <StepValoracion runRaId={runRaId} />}
-        {step === 5 && <StepTratamiento runRaId={runRaId} />}
+      <div style={{ flex: 1, padding: '2rem', maxWidth: (step === 2 || step === 3 || step === 4 || step === 5) ? '96%' : 1152, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        {step !== 1 && step !== 2 && step !== 3 && (
+          <div style={{ marginBottom: '1.35rem' }}>
+            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.025em' }}>
+              {current.label}
+            </h2>
+            <p style={{ margin: '0.25rem 0 0', fontSize: '0.78rem', color: '#475569', lineHeight: 1.5 }}>
+              {current.desc}
+            </p>
+          </div>
+        )}
+
+        {step === 1
+          ? <StepContexto runRaId={runRaId} />
+          : step === 2
+            ? <StepAnalisisRiesgo runRaId={runRaId} />
+            : step === 3
+              ? <StepAnalisisControl runRaId={runRaId} />
+              : step === 4
+                ? <StepValoracion runRaId={runRaId} />
+                : step === 5
+                  ? <StepTratamiento runRaId={runRaId} />
+                  : <StepPlaceholder step={current} />}
       </div>
 
       <div style={{
@@ -266,7 +337,7 @@ export function EvaluationWizard({ runRaId, runRaCode, onExit }: {
         position: 'sticky', bottom: 0, zIndex: 100,
       }}>
         <button
-          onClick={() => setStep(s => Math.max(1, s - 1))}
+          onClick={() => setStep((s) => Math.max(1, s - 1))}
           disabled={step === 1}
           style={{
             display: 'flex', alignItems: 'center', gap: '0.45rem',
@@ -280,7 +351,7 @@ export function EvaluationWizard({ runRaId, runRaCode, onExit }: {
         </button>
 
         <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-          {STEPS.map(s => (
+          {STEPS.map((s) => (
             <div key={s.id} style={{
               width: s.id === step ? 22 : 6, height: 6, borderRadius: 999,
               background: s.id === step ? '#3b82f6' : s.id < step ? '#34d399' : 'rgba(255,255,255,0.1)',
@@ -291,7 +362,7 @@ export function EvaluationWizard({ runRaId, runRaCode, onExit }: {
 
         {step < STEPS.length ? (
           <button
-            onClick={() => setStep(s => s + 1)}
+            onClick={() => setStep((s) => s + 1)}
             style={{
               display: 'flex', alignItems: 'center', gap: '0.45rem',
               padding: '0.55rem 1.2rem', borderRadius: 10,
@@ -303,7 +374,25 @@ export function EvaluationWizard({ runRaId, runRaCode, onExit }: {
             Siguiente <ChevronRight size={14} />
           </button>
         ) : (
-          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button
+              onClick={handleGenerateReport}
+              disabled={generatingReport}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '0.45rem',
+                padding: '0.55rem 1.2rem', borderRadius: 10,
+                background: 'rgba(59,130,246,0.08)',
+                border: '1px solid rgba(59,130,246,0.22)',
+                color: '#60a5fa', fontSize: '0.8rem', fontWeight: 700,
+                cursor: generatingReport ? 'not-allowed' : 'pointer',
+                opacity: generatingReport ? 0.7 : 1,
+              }}
+            >
+              {generatingReport
+                ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Generando…</>
+                : <><FileText size={14} /> Generar informe</>}
+            </button>
+
             <button
               onClick={handleFinalize}
               disabled={finalizing || lifecycleCode === 'COMPLETED'}

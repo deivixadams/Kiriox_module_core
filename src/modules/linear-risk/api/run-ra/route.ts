@@ -1,24 +1,39 @@
 import { withAccess } from "@/core/permissions/http/withAccess";
-import { ok, created } from "@/shared/utils/http-responses";
+import { ok } from "@/shared/utils/http-responses";
 import { PrismaLinearRiskRepository } from "../../infrastructure/repositories/PrismaLinearRiskRepository";
 
-const repository = new PrismaLinearRiskRepository();
+const repo = new PrismaLinearRiskRepository();
 
-export const POST = withAccess({ module: 'linear-risk', permission: 'read' }, async (request, context, access) => {
-  const { searchParams } = new URL(request.url);
-  const forceNew = searchParams.get("forceNew") === "true";
-
-  const result = await repository.createEvaluation(access.company.id, forceNew);
-
-  return created(result);
+export const POST = withAccess({ module: 'linear-risk', permission: 'write' }, async (request, context, access) => {
+  const url = new URL(request.url);
+  const forceNew = url.searchParams.get('forceNew') === 'true';
+  const result = await repo.createEvaluation(access.company.id, forceNew);
+  return ok(result);
 });
 
-export const DELETE = withAccess({ module: 'linear-risk', permission: 'read' }, async (request) => {
+export const DELETE = withAccess({ module: 'linear-risk', permission: 'write' }, async (request) => {
   const body = await request.json();
-  const { id } = body;
+  const id = String(body?.id ?? '').trim();
+  if (!id) return new Response('id is required', { status: 400 });
+  await repo.deleteEvaluation(id);
+  return ok({ ok: true });
+});
 
-  if (!id) return new Response("ID is required", { status: 400 });
+export const PATCH = withAccess({ module: 'linear-risk', permission: 'write' }, async (request, context, access) => {
+  const body = await request.json();
+  const runRaId = String(body?.runRaId ?? body?.id ?? '').trim();
+  const { toCode, to_state, changeReason, completionReason } = body;
 
-  await repository.deleteEvaluation(id);
-  return ok({ deleted: true });
+  if (!runRaId) return new Response('runRaId is required', { status: 400 });
+
+  await repo.transitionLifecycleState({
+    runRaId,
+    companyId: access.company.id,
+    changedBy: access.user.id,
+    toCode: toCode || to_state || 'completed',
+    changeReason,
+    completionReason
+  });
+
+  return ok({ ok: true });
 });

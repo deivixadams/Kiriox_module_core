@@ -8,15 +8,16 @@ import {
   Eye,
   FolderOpen,
   Loader2,
+  Pencil,
+  Play,
   Plus,
   RefreshCw,
   Search,
   Shield,
   ClipboardList,
   Trash2,
-  Play
 } from 'lucide-react';
-import { LinearRiskEvaluation } from '../../domain/types';
+import type { LinearRiskEvaluation } from '../../domain/types';
 
 type EvalItem = LinearRiskEvaluation;
 
@@ -57,8 +58,18 @@ export function StepDashboard({
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState('');
 
-  const loadData = React.useCallback(() => {
-    setLoading(true);
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isHandover = urlParams.get('launchWizard') === 'true';
+
+    if (!isHandover) {
+      sessionStorage.removeItem('KIRIOX_PRESELECTED_PROCESS_ID');
+      sessionStorage.removeItem('KIRIOX_PRESELECTED_ACTIVITY_ID');
+      sessionStorage.removeItem('KIRIOX_PRESELECTED_PROCESS_NAME');
+    }
+  }, []);
+
+  React.useEffect(() => {
     fetch('/api/linear-risk/evaluations')
       .then((r) => r.json())
       .then((d: { stats: DashboardStats; evaluations: EvalItem[] }) => {
@@ -68,12 +79,8 @@ export function StepDashboard({
       .finally(() => setLoading(false));
   }, []);
 
-  React.useEffect(() => {
-    loadData();
-  }, [loadData]);
-
   const handleDelete = async (id: string, code: string) => {
-    if (!window.confirm(`¿Está seguro de eliminar permanentemente la evaluación ${code}? Esta acción no se puede deshacer.`)) {
+    if (!window.confirm(`¿Está seguro de eliminar permanentemente la evaluación ${code}? Esta acción no se puede deshacer y eliminará todos los riesgos, controles y evidencias asociados.`)) {
       return;
     }
 
@@ -86,10 +93,14 @@ export function StepDashboard({
       });
 
       if (!res.ok) throw new Error('Error al eliminar');
-      loadData();
+
+      const r = await fetch('/api/linear-risk/evaluations');
+      const d = await r.json();
+      setStats(d.stats);
+      setEvals(d.evaluations);
     } catch (err) {
       console.error(err);
-      alert('Error: No se pudo completar la eliminación.');
+      alert('Error: No se pudo completar la eliminación en cascada.');
     } finally {
       setLoading(false);
     }
@@ -98,24 +109,27 @@ export function StepDashboard({
   const filtered = evals.filter((ev) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
-    return (
-      ev.code.toLowerCase().includes(q) || 
-      ev.title.toLowerCase().includes(q) || 
-      ev.scope.toLowerCase().includes(q) || 
-      ev.responsible.toLowerCase().includes(q)
-    );
+    return ev.code.toLowerCase().includes(q) || ev.title.toLowerCase().includes(q) || ev.scope.toLowerCase().includes(q) || ev.responsible.toLowerCase().includes(q);
   });
+
+  const pageItems = filtered;
 
   const statCards = [
     { label: 'Evaluaciones realizadas', value: stats.total, sub: 'Total', color: '#6366f1', Icon: ClipboardList },
-    { label: 'En borrador', value: stats.borrador, sub: null, color: '#22c55e', Icon: PencilPlaceholder },
+    { label: 'En borrador', value: stats.borrador, sub: null, color: '#22c55e', Icon: Pencil },
     { label: isSimulationsDashboard ? 'Fallas de controles' : 'En proceso', value: stats.en_proceso, sub: null, color: '#f59e0b', Icon: RefreshCw },
     { label: isSimulationsDashboard ? 'Monte carlo' : 'Finalizadas', value: stats.finalizada, sub: null, color: '#a78bfa', Icon: CheckCircle2 },
     { label: isSimulationsDashboard ? 'Var paramétrico' : 'Pendientes de tratamiento', value: stats.en_tratamiento, sub: null, color: '#ef4444', Icon: AlertCircle },
   ];
 
+  const simulationCardRouteByLabel: Record<string, string> = {
+    'Fallas de controles': '/app-simulation',
+    'Monte carlo': '/score/simulacion/monte-carlo',
+    'Var paramétrico': '/app-simulation-Liquidez',
+  };
+
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #0d1634 0%, #080f23 100%)', fontFamily: 'inherit', color: '#fff' }}>
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #0d1634 0%, #080f23 100%)', fontFamily: 'inherit' }}>
       <div style={{ padding: '2.5rem 2.5rem 2rem', background: 'transparent' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
@@ -172,6 +186,7 @@ export function StepDashboard({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.9rem' }}>
           {statCards.map((card) => {
             const pct = stats.total > 0 ? ((card.value / stats.total) * 100).toFixed(1) : '0';
+            const clickRoute = isSimulationsDashboard ? simulationCardRouteByLabel[card.label] : undefined;
             return (
               <div
                 key={card.label}
@@ -182,7 +197,9 @@ export function StepDashboard({
                   padding: '1.1rem 1.2rem 0.9rem',
                   position: 'relative',
                   overflow: 'hidden',
+                  cursor: clickRoute ? 'pointer' : 'default',
                 }}
+                onClick={clickRoute ? () => router.push(clickRoute) : undefined}
               >
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${card.color}88, ${card.color}22)` }} />
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem', marginBottom: '0.8rem' }}>
@@ -221,7 +238,9 @@ export function StepDashboard({
                 <Search size={13} color="#475569" />
                 <input
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                  }}
                   placeholder="Buscar evaluación…"
                   style={{ background: 'none', border: 'none', outline: 'none', color: '#e2e8f0', fontSize: '0.8rem', width: 200, fontFamily: 'inherit' }}
                 />
@@ -229,7 +248,7 @@ export function StepDashboard({
             </div>
           </div>
 
-          {loading && evals.length === 0 ? (
+          {loading ? (
             <div style={{ padding: '4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.6rem', color: '#475569' }}>
               <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
               <span style={{ fontSize: '0.82rem' }}>Cargando evaluaciones…</span>
@@ -247,14 +266,14 @@ export function StepDashboard({
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.length === 0 && (
+                  {pageItems.length === 0 && (
                     <tr>
                       <td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: '#475569', fontSize: '0.82rem' }}>
                         No se encontraron evaluaciones
                       </td>
                     </tr>
                   )}
-                  {filtered.map((ev, idx) => {
+                  {pageItems.map((ev, idx) => {
                     const pColor = progressColor(ev.status);
                     const aBg = avatarBg(ev.initials);
                     return (
@@ -296,16 +315,24 @@ export function StepDashboard({
                           </span>
                         </td>
                         <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap', color: '#94a3b8' }}>
-                          <div>
-                            <div style={{ color: '#cbd5e1', fontWeight: 600 }}>{ev.created_at.split(' ')[0]}</div>
-                            <div style={{ fontSize: '0.65rem', color: '#475569' }}>{ev.created_at.split(' ')[1]}</div>
-                          </div>
+                          {ev.created_at ? (
+                            <div>
+                              <div style={{ color: '#cbd5e1', fontWeight: 600 }}>{ev.created_at.split(' ')[0]}</div>
+                              <div style={{ fontSize: '0.65rem', color: '#475569' }}>{ev.created_at.split(' ')[1]}</div>
+                            </div>
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap' }}>
-                          <div>
-                            <div style={{ color: '#cbd5e1', fontWeight: 600 }}>{ev.updated_at.split(' ')[0]}</div>
-                            <div style={{ fontSize: '0.65rem', color: '#475569' }}>{ev.updated_at.split(' ')[1]}</div>
-                          </div>
+                          {ev.updated_at ? (
+                            <div>
+                              <div style={{ color: '#cbd5e1', fontWeight: 600 }}>{ev.updated_at.split(' ')[0]}</div>
+                              <div style={{ fontSize: '0.65rem', color: '#475569' }}>{ev.updated_at.split(' ')[1]}</div>
+                            </div>
+                          ) : (
+                            '—'
+                          )}
                         </td>
                         <td style={{ padding: '0.85rem 1rem', whiteSpace: 'nowrap', minWidth: 110 }}>
                           <div style={{ color: pColor, fontWeight: 700, fontSize: '0.8rem', marginBottom: '0.3rem' }}>{ev.progress}%</div>
@@ -322,16 +349,28 @@ export function StepDashboard({
                                 height: 28,
                                 borderRadius: 7,
                                 cursor: 'pointer',
-                                background: 'rgba(59,130,246,0.12)',
-                                border: '1px solid rgba(59,130,246,0.3)',
-                                color: '#60a5fa',
+                                background: ev.status === 'COMPLETADA'
+                                  ? 'rgba(167,139,250,0.12)'
+                                  : ev.status === 'EN TRATAMIENTO'
+                                    ? 'rgba(239,68,68,0.1)'
+                                    : 'rgba(59,130,246,0.12)',
+                                border: ev.status === 'COMPLETADA'
+                                  ? '1px solid rgba(167,139,250,0.3)'
+                                  : ev.status === 'EN TRATAMIENTO'
+                                    ? '1px solid rgba(239,68,68,0.28)'
+                                    : '1px solid rgba(59,130,246,0.3)',
+                                color: ev.status === 'COMPLETADA'
+                                  ? '#a78bfa'
+                                  : ev.status === 'EN TRATAMIENTO'
+                                    ? '#f87171'
+                                    : '#60a5fa',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                               }}
-                              title="Abrir"
+                              title={ev.status === 'COMPLETADA' ? 'Ver' : ev.status === 'EN TRATAMIENTO' ? 'Abrir' : 'Continuar'}
                             >
-                              <Play size={13} />
+                              {ev.status === 'COMPLETADA' ? <Eye size={13} /> : ev.status === 'EN TRATAMIENTO' ? <FolderOpen size={13} /> : <Play size={13} />}
                             </button>
                             <button
                               onClick={() => onOpenEvaluation(ev.id, ev.code)}
@@ -365,7 +404,7 @@ export function StepDashboard({
                                 justifyContent: 'center',
                                 color: '#f87171',
                               }}
-                              title="Eliminar"
+                              title="Eliminar evaluación"
                             >
                               <Trash2 size={13} />
                             </button>
@@ -382,14 +421,5 @@ export function StepDashboard({
       </div>
       <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
     </div>
-  );
-}
-
-function PencilPlaceholder({ size, color }: { size: number, color: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
-      <path d="m15 5 4 4"/>
-    </svg>
   );
 }

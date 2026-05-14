@@ -13,16 +13,19 @@
     "@prisma/client": "^7.8.0",
     "@tanstack/react-query": "^5.100.9",
     "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
     "cytoscape": "^3.33.1",
     "cytoscape-fcose": "^2.2.0",
-    "clsx": "^2.1.1",
+    "docxtemplater": "^3.68.7",
+    "docxtemplater-image-module-free": "^1.1.1",
     "jose": "^6.2.3",
     "lucide-react": "^1.14.0",
     "next": "16.2.6",
+    "pizzip": "^3.2.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "zustand": "^5.0.12",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -11,7 +11,8 @@ export type ModuleCode =
   | 'catalog'
   | 'company'
   | 'monitoring'
-  | 'hechos-relevantes';
+  | 'hechos-relevantes'
+  | 'reportes';
 
 export type AccessRequirement = {
   module: ModuleCode;

@@ -1,48 +1,64 @@
 'use client';
 
-import React from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StepDashboard } from '../components/StepDashboard';
 import { EvaluationWizard } from '../components/context-wizard/EvaluationWizard';
 
-export default function LinearRiskDashboardPage() {
-  const [view, setView] = React.useState<'dashboard' | 'wizard'>('dashboard');
-  const [activeRunRa, setActiveRunRa] = React.useState<{ id: string; code: string } | null>(null);
-  const [creating, setCreating] = React.useState(false);
+const RUN_RA_KEY = 'kiriox_active_run_ra_id';
 
-  const handleNewEvaluation = async () => {
+export default function LinearRiskDashboardPage() {
+  const [view, setView] = useState<'dashboard' | 'wizard'>('dashboard');
+  const [runRaId, setRunRaId] = useState<string | null>(null);
+  const [runRaCode, setRunRaCode] = useState('');
+  const [creating, setCreating] = useState(false);
+  const hasLaunchedRef = useRef(false);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('launchWizard') === 'true' && !hasLaunchedRef.current && view === 'dashboard') {
+      hasLaunchedRef.current = true;
+      void handleNewEvaluation();
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [view]);
+
+  async function handleNewEvaluation() {
     setCreating(true);
     try {
       const res = await fetch('/api/linear-risk/run-ra?forceNew=true', { method: 'POST' });
-      if (!res.ok) throw new Error('Error al crear');
-      const data = await res.json();
-      setActiveRunRa({ id: data.id, code: data.code });
+      const data = (await res.json()) as { id: string; code: string };
+      localStorage.setItem(RUN_RA_KEY, data.id);
+      setRunRaId(data.id);
+      setRunRaCode(data.code);
       setView('wizard');
-    } catch (err) {
-      console.error(err);
-      alert('Error: No se pudo iniciar la evaluación.');
+    } catch {
+      const id = crypto.randomUUID();
+      localStorage.setItem(RUN_RA_KEY, id);
+      setRunRaId(id);
+      setRunRaCode('');
+      setView('wizard');
     } finally {
       setCreating(false);
     }
-  };
+  }
 
-  const handleOpenEvaluation = (id: string, code: string) => {
-    setActiveRunRa({ id, code });
+  function handleOpenEvaluation(id: string, code: string) {
+    localStorage.setItem(RUN_RA_KEY, id);
+    setRunRaId(id);
+    setRunRaCode(code);
     setView('wizard');
-  };
+  }
 
-  const handleExitWizard = () => {
+  function handleExit(_action: 'draft' | 'delete') {
+    void _action;
+    localStorage.removeItem(RUN_RA_KEY);
+    setRunRaId(null);
+    setRunRaCode('');
     setView('dashboard');
-    setActiveRunRa(null);
-  };
+  }
 
-  if (view === 'wizard' && activeRunRa) {
-    return (
-      <EvaluationWizard
-        runRaId={activeRunRa.id}
-        runRaCode={activeRunRa.code}
-        onExit={handleExitWizard}
-      />
-    );
+  if (view === 'wizard' && runRaId) {
+    return <EvaluationWizard runRaId={runRaId} runRaCode={runRaCode} onExit={handleExit} />;
   }
 
   return (
