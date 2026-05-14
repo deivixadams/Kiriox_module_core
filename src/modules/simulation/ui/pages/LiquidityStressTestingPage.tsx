@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import styles from './StressTestingPage.module.css';
 
 type FundType = 'FICI Interval I' | 'FICD Interval I';
@@ -53,6 +54,8 @@ type RunRecord = {
 
 const STORAGE_KEY = 'kiriox_liquidity_stress_v1';
 const USER = 'dev@kiriox.local';
+const AUTO_SIMULATION_TARGET = 3000;
+const RUN_HISTORY_LIMIT = 10;
 
 const DEFAULT_RULES: Rules = {
   lowMax: 5,
@@ -205,23 +208,18 @@ function requiredEvidence(severity: string): string[] {
 }
 
 export default function LiquidityStressTestingPage() {
+  const router = useRouter();
   const [fund, setFund] = useState<FundType>('FICI Interval I');
   const [profile, setProfile] = useState<ProfileName>('Base');
   const [version, setVersion] = useState(1);
+  const [rulesModalOpen, setRulesModalOpen] = useState(false);
   const [parameters, setParameters] = useState<Parameter[]>(buildFiciParams());
   const [rules, setRules] = useState<Rules>(DEFAULT_RULES);
   const [limitations, setLimitations] = useState('Simulación lineal parametrizada. Datos marcados como hipotéticos cuando fuente != publico/usuario.');
-  const [runs, setRuns] = useState<RunRecord[]>(() => {
-    if (typeof window === 'undefined') return [];
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    try {
-      const parsed = JSON.parse(raw) as { runs: RunRecord[] };
-      return parsed.runs ?? [];
-    } catch {
-      return [];
-    }
-  });
+  const [autoSimulation, setAutoSimulation] = useState({ running: false, completed: 0, target: AUTO_SIMULATION_TARGET });
+  const [runs, setRuns] = useState<RunRecord[]>([]);
+  const autoStopRef = useRef(false);
+  const simulationSpeedRef = useRef(6);
 
   const core = useMemo(() => computeResult(fund, parameters), [fund, parameters]);
   const classification = useMemo(() => classify(core.impactoPct, rules), [core.impactoPct, rules]);
@@ -258,6 +256,14 @@ export default function LiquidityStressTestingPage() {
     setVersion((v) => v + 1);
   }
 
+  function updateParamValue(i: number, val: string) {
+    updateParam(i, 'value', val);
+  }
+
+  function updateParamJustification(i: number, val: string) {
+    updateParam(i, 'justification', val);
+  }
+
   function randomizeScenario() {
     setParameters((prev) =>
       prev.map((p) => {
@@ -272,6 +278,67 @@ export default function LiquidityStressTestingPage() {
     );
     setProfile('Personalizado');
     setVersion((v) => v + 1);
+  }
+
+  function getAutoSimulationDelay(speed: number) {
+    const minDelay = 12;
+    const maxDelay = 650;
+    return Math.round(maxDelay - ((speed - 1) / 9) * (maxDelay - minDelay));
+  }
+
+  function getAutoSimulationBatchSize(speed: number) {
+    const minBatch = 1;
+    const maxBatch = 45;
+    return Math.round(minBatch + ((speed - 1) / 9) * (maxBatch - minBatch));
+  }
+
+  function buildRandomizedParameters(sourceParams: Parameter[]): Parameter[] {
+    return sourceParams.map((p) => ({
+      ...p,
+      value: Number((p.min + Math.random() * (p.max - p.min)).toFixed(4)),
+      source: 'supuesto_hipotetico',
+      justification: p.justification || 'Simulación automatizada',
+    }));
+  }
+
+  function buildRunRecord(nextParams: Parameter[], nextVersion: number): RunRecord {
+    const nextCore = computeResult(fund, nextParams);
+    const nextClassification = classify(nextCore.impactoPct, rules);
+    const nextControls = suggestedControls(nextClassification.severity);
+    const nextEvidences = requiredEvidence(nextClassification.severity);
+    const nextExplanation = `Escenario Personalizado en ${fund}: pérdida ${nextCore.impactoPct.toFixed(2)}%, liquidez neta ${nextCore.liquidezNeta.toFixed(2)}. Severidad ${nextClassification.severity}; decisión sugerida: ${nextClassification.decision}.`;
+    const snapshot = { fund, profile: 'Personalizado', version: nextVersion, parameters: nextParams, rules };
+
+    return {
+      id: crypto.randomUUID(),
+      kingdom: 'AFI Interval',
+      element: fund,
+      riskType,
+      scenario: 'Personalizado',
+      profileVersion: nextVersion,
+      executedAt: new Date().toISOString(),
+      user: USER,
+      parameterHash: hashSnapshot(snapshot),
+      parameters: structuredClone(nextParams),
+      rules: structuredClone(rules),
+      result: {
+        ...nextCore,
+        severity: nextClassification.severity,
+        decisionSuggested: nextClassification.decision,
+      },
+      explanation: nextExplanation,
+      limitations,
+      controlsSuggested: nextControls,
+      evidenceRequired: nextEvidences,
+    };
+  }
+
+  function persistRuns(nextRuns: RunRecord[] | ((prev: RunRecord[]) => RunRecord[])) {
+    setRuns((prev) => {
+      const resolved = (typeof nextRuns === 'function' ? nextRuns(prev) : nextRuns).slice(0, RUN_HISTORY_LIMIT);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ runs: resolved }));
+      return resolved;
+    });
   }
 
   function saveRun() {
@@ -299,88 +366,132 @@ export default function LiquidityStressTestingPage() {
       controlsSuggested: controls,
       evidenceRequired: evidences,
     };
-    const next = [record, ...runs].slice(0, 60);
+    const next = [record, ...runs].slice(0, RUN_HISTORY_LIMIT);
     setRuns(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ runs: next }));
   }
+
+  function stopAutoSimulation() {
+    autoStopRef.current = true;
+    setAutoSimulation((prev) => ({ ...prev, running: false }));
+  }
+
+  function startAutoSimulation() {
+    if (autoSimulation.running) return;
+
+    autoStopRef.current = false;
+    setProfile('Personalizado');
+    setAutoSimulation({ running: true, completed: 0, target: AUTO_SIMULATION_TARGET });
+
+    let completed = 0;
+    let versionCursor = version;
+    let currentParamsCursor = parameters;
+
+    const tick = () => {
+      if (autoStopRef.current) return;
+
+      const currentSpeed = simulationSpeedRef.current;
+      const remaining = AUTO_SIMULATION_TARGET - completed;
+      const batchCount = Math.min(getAutoSimulationBatchSize(currentSpeed), remaining);
+      let latestParams = currentParamsCursor;
+      const batchRecords: RunRecord[] = [];
+
+      for (let i = 0; i < batchCount; i += 1) {
+        versionCursor += 1;
+        const nextParams = buildRandomizedParameters(latestParams);
+        batchRecords.push(buildRunRecord(nextParams, versionCursor));
+        latestParams = nextParams;
+      }
+
+      completed += batchCount;
+      currentParamsCursor = latestParams;
+      setParameters(latestParams);
+      setVersion(versionCursor);
+      setAutoSimulation({ running: completed < AUTO_SIMULATION_TARGET, completed, target: AUTO_SIMULATION_TARGET });
+      persistRuns((prev) => [...batchRecords.reverse(), ...prev].slice(0, RUN_HISTORY_LIMIT));
+
+      if (completed < AUTO_SIMULATION_TARGET) {
+        setTimeout(tick, getAutoSimulationDelay(simulationSpeedRef.current));
+      } else {
+        autoStopRef.current = true;
+      }
+    };
+
+    setTimeout(tick, 0);
+  }
+
+  useEffect(() => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as { runs: RunRecord[] };
+      const storedRuns = parsed.runs ?? [];
+      const trimmed = storedRuns.slice(0, RUN_HISTORY_LIMIT);
+      const timeoutId = window.setTimeout(() => {
+        setRuns(trimmed);
+      }, 0);
+      if (trimmed.length !== storedRuns.length) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ runs: trimmed }));
+      }
+      return () => window.clearTimeout(timeoutId);
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      autoStopRef.current = true;
+    };
+  }, []);
 
   return (
     <main className={styles.page}>
       <div className={styles.wrap}>
         <section className={styles.card}>
-          <h1 className={styles.title}>Motor de simulación de stress testing y liquidez (Lineal)</h1>
+          <h1 className={styles.title}>Stress testing de liquidez parametrizable</h1>
+          <div className={styles.metaRow}>
+            <span className={styles.metaPill}>Perfil v{version}</span>
+            <span className={styles.metaPill}>{USER}</span>
+            <span className={styles.metaPill}>{parameters.length} supuestos activos</span>
+          </div>
           <div className={styles.row}>
-            <label className={styles.field}><span className={styles.label}>Kingdom</span><input className={styles.input} value="AFI Interval" readOnly /></label>
-            <label className={styles.field}><span className={styles.label}>Elemento (Fondo)</span>
+            <label className={styles.field}><span className={styles.label}>Fondo</span>
               <select className={styles.select} value={fund} onChange={(e) => handleFundChange(e.target.value as FundType)}>
                 <option>FICI Interval I</option><option>FICD Interval I</option>
               </select>
             </label>
-            <label className={styles.field}><span className={styles.label}>Perfil escenario</span>
+            <label className={styles.field}><span className={styles.label}>Perfil</span>
               <select className={styles.select} value={profile} onChange={(e) => handleProfileChange(e.target.value as ProfileName)}>
                 <option>Base</option><option>Moderado</option><option>Severo</option><option>Extremo</option><option>Personalizado</option>
               </select>
             </label>
-            <label className={styles.field}><span className={styles.label}>Versión perfil</span><input className={styles.input} value={version} readOnly /></label>
           </div>
           <div className={styles.actions} style={{ marginTop: 10 }}>
             <button className={styles.btn} type="button" onClick={randomizeScenario}>Simular</button>
-            <button className={styles.btn} type="button" onClick={saveRun}>Guardar corrida auditable</button>
+            <button
+              className={`${styles.btn} ${autoSimulation.running ? styles.btnDanger : styles.btnSuccess}`}
+              type="button"
+              onClick={autoSimulation.running ? stopAutoSimulation : startAutoSimulation}
+            >
+              {autoSimulation.running ? 'Stop' : 'Auto simular'}
+            </button>
+            <button className={styles.btn} type="button" onClick={saveRun}>Guardar corrida</button>
+            <button className={`${styles.btn} ${styles.btnGhost}`} type="button" onClick={() => setRulesModalOpen(true)}>Reglas</button>
+            <button className={`${styles.btn} ${styles.btnGhost}`} type="button" onClick={() => router.push('/gestion/dashboard_simulaciones')}>Cerrar</button>
+          </div>
+          <div className={styles.liveStatus}>
+            {autoSimulation.running
+              ? `Auto simulación en curso: ${autoSimulation.completed.toLocaleString()} / ${autoSimulation.target.toLocaleString()} corridas`
+              : autoSimulation.completed > 0
+                ? `Última auto simulación: ${autoSimulation.completed.toLocaleString()} corridas procesadas`
+                : 'Modo manual activo'}
           </div>
         </section>
 
         <section className={styles.card}>
-          <h2 className={styles.title}>Parámetros (editables y versionables)</h2>
-          <div className={styles.grid}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Nombre técnico</th><th>Etiqueta</th><th>Descripción</th><th>Unidad</th><th>Valor</th><th>Mín</th><th>Máx</th><th>Escenario</th><th>Justificación</th><th>Fuente</th>
-                </tr>
-              </thead>
-              <tbody>
-                {parameters.map((p, i) => (
-                  <tr key={p.key}>
-                    <td>{p.technicalName}</td>
-                    <td><input className={styles.input} value={p.label} onChange={(e) => updateParam(i, 'label', e.target.value)} /></td>
-                    <td><input className={styles.input} value={p.description} onChange={(e) => updateParam(i, 'description', e.target.value)} /></td>
-                    <td><input className={styles.input} value={p.unit} onChange={(e) => updateParam(i, 'unit', e.target.value)} /></td>
-                    <td><input className={styles.input} type="number" value={p.value} onChange={(e) => updateParam(i, 'value', e.target.value)} /></td>
-                    <td><input className={styles.input} type="number" value={p.min} onChange={(e) => updateParam(i, 'min', e.target.value)} /></td>
-                    <td><input className={styles.input} type="number" value={p.max} onChange={(e) => updateParam(i, 'max', e.target.value)} /></td>
-                    <td><input className={styles.input} value={p.scenario} onChange={(e) => updateParam(i, 'scenario', e.target.value)} /></td>
-                    <td><input className={styles.input} value={p.justification} onChange={(e) => updateParam(i, 'justification', e.target.value)} /></td>
-                    <td>
-                      <select className={styles.select} value={p.source} onChange={(e) => updateParam(i, 'source', e.target.value)}>
-                        <option value="publico">publico</option>
-                        <option value="usuario">usuario</option>
-                        <option value="supuesto_hipotetico">supuesto hipotético</option>
-                        <option value="modelo_interno">modelo interno</option>
-                      </select>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className={styles.card}>
-          <h2 className={styles.title}>Reglas parametrizables (severidad y decisión)</h2>
-          <div className={styles.row}>
-            <label className={styles.field}><span className={styles.label}>Baja menor a %</span><input className={styles.input} type="number" value={rules.lowMax} onChange={(e) => setRules((r) => ({ ...r, lowMax: Number(e.target.value) }))} /></label>
-            <label className={styles.field}><span className={styles.label}>Media menor a %</span><input className={styles.input} type="number" value={rules.mediumMax} onChange={(e) => setRules((r) => ({ ...r, mediumMax: Number(e.target.value) }))} /></label>
-            <label className={styles.field}><span className={styles.label}>Alta menor a %</span><input className={styles.input} type="number" value={rules.highMax} onChange={(e) => setRules((r) => ({ ...r, highMax: Number(e.target.value) }))} /></label>
-            <label className={styles.field}><span className={styles.label}>Limitaciones</span><input className={styles.input} value={limitations} onChange={(e) => setLimitations(e.target.value)} /></label>
-            <label className={styles.field}><span className={styles.label}>Decisión baja</span><input className={styles.input} value={rules.decisionLow} onChange={(e) => setRules((r) => ({ ...r, decisionLow: e.target.value }))} /></label>
-            <label className={styles.field}><span className={styles.label}>Decisión media</span><input className={styles.input} value={rules.decisionMedium} onChange={(e) => setRules((r) => ({ ...r, decisionMedium: e.target.value }))} /></label>
-            <label className={styles.field}><span className={styles.label}>Decisión alta</span><input className={styles.input} value={rules.decisionHigh} onChange={(e) => setRules((r) => ({ ...r, decisionHigh: e.target.value }))} /></label>
-            <label className={styles.field}><span className={styles.label}>Decisión crítica</span><input className={styles.input} value={rules.decisionCritical} onChange={(e) => setRules((r) => ({ ...r, decisionCritical: e.target.value }))} /></label>
-          </div>
-        </section>
-
-        <section className={styles.card}>
-          <h2 className={styles.title}>Salidas de simulación</h2>
+          <h2 className={styles.title}>Resultado inmediato</h2>
           <div className={styles.kpi}>
             <div className={styles.kpiBox}><div className={styles.kpiLabel}>Valor base</div><div className={styles.kpiValue}>{core.valorBase.toFixed(2)}</div></div>
             <div className={styles.kpiBox}><div className={styles.kpiLabel}>Valor estresado</div><div className={styles.kpiValue}>{core.valorEstresado.toFixed(2)}</div></div>
@@ -389,12 +500,13 @@ export default function LiquidityStressTestingPage() {
             <div className={styles.kpiBox}><div className={styles.kpiLabel}>Impacto por cuota</div><div className={styles.kpiValue}>{core.impactoCuota.toFixed(6)}</div></div>
             <div className={styles.kpiBox}><div className={styles.kpiLabel}>Liquidez neta</div><div className={styles.kpiValue}>{core.liquidezNeta.toFixed(2)}</div></div>
             <div className={styles.kpiBox}><div className={styles.kpiLabel}>Meses cobertura</div><div className={styles.kpiValue}>{core.mesesCobertura.toFixed(2)}</div></div>
+            <div className={styles.kpiBox}><div className={styles.kpiLabel}>Brecha de liquidez</div><div className={styles.kpiValue}>{core.brechaLiquidez.toFixed(2)}</div></div>
+            <div className={styles.kpiBox}><div className={styles.kpiLabel}>Severidad</div><div className={styles.kpiValue}>{classification.severity}</div></div>
+            <div className={styles.kpiBox}><div className={styles.kpiLabel}>Decisión sugerida</div><div className={styles.kpiValue}>{classification.decision}</div></div>
           </div>
-          <div className={styles.row} style={{ marginTop: 10 }}>
-            <label className={styles.field}><span className={styles.label}>Brecha de liquidez</span><input className={styles.input} value={core.brechaLiquidez.toFixed(2)} readOnly /></label>
-            <label className={styles.field}><span className={styles.label}>Severidad</span><input className={styles.input} value={classification.severity} readOnly /></label>
-            <label className={styles.field}><span className={styles.label}>Decisión sugerida</span><input className={styles.input} value={classification.decision} readOnly /></label>
-            <label className={styles.field}><span className={styles.label}>Explicación ejecutiva</span><input className={styles.input} value={explanation} readOnly /></label>
+          <div className={styles.executiveBox}>
+            <div className={styles.executiveLabel}>Explicación ejecutiva</div>
+            <div className={styles.executiveText}>{explanation}</div>
           </div>
           <div className={styles.row} style={{ marginTop: 10 }}>
             <label className={styles.field}><span className={styles.label}>Controles sugeridos</span><textarea className={styles.textarea} value={controls.join(' | ')} readOnly /></label>
@@ -405,7 +517,51 @@ export default function LiquidityStressTestingPage() {
         </section>
 
         <section className={styles.card}>
-          <h2 className={styles.title}>Historial auditable y reproducible</h2>
+          <div className={styles.sectionHead}>
+            <div>
+              <h2 className={styles.title}>Parámetros de escenario</h2>
+              <p className={styles.sectionHint}>Se editan sólo los supuestos operativos necesarios para ejecutar la corrida. La metadata técnica del modelo queda gobernada por el sistema.</p>
+            </div>
+          </div>
+          <div className={styles.grid}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Parámetro</th><th>Descripción</th><th>Unidad</th><th>Valor</th><th>Rango</th><th>Justificación</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parameters.map((p, i) => (
+                  <tr key={p.key}>
+                    <td>
+                      <div className={styles.paramName}>{p.label}</div>
+                      <div className={styles.paramMeta}>{p.technicalName}</div>
+                    </td>
+                    <td>
+                      <div className={styles.paramDescription}>{p.description}</div>
+                      <div className={styles.paramMeta}>{p.scenario} · {p.source.replaceAll('_', ' ')}</div>
+                    </td>
+                    <td>{p.unit}</td>
+                    <td>
+                      <input className={styles.input} type="number" value={p.value} onChange={(e) => updateParamValue(i, e.target.value)} />
+                    </td>
+                    <td>
+                      <div className={styles.rangeBox}>
+                        <span>{p.min}</span>
+                        <span className={styles.rangeSeparator}>a</span>
+                        <span>{p.max}</span>
+                      </div>
+                    </td>
+                    <td><input className={styles.input} value={p.justification} onChange={(e) => updateParamJustification(i, e.target.value)} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className={styles.card}>
+          <h2 className={styles.title}>Historial auditable de corridas</h2>
           <div className={styles.grid}>
             <table className={styles.table}>
               <thead>
@@ -414,7 +570,7 @@ export default function LiquidityStressTestingPage() {
                 </tr>
               </thead>
               <tbody>
-                {runs.map((r) => (
+                {runs.slice(0, RUN_HISTORY_LIMIT).map((r) => (
                   <tr key={r.id}>
                     <td>{new Date(r.executedAt).toLocaleString()}</td>
                     <td>{r.element}</td>
@@ -432,6 +588,36 @@ export default function LiquidityStressTestingPage() {
             </table>
           </div>
         </section>
+
+        {rulesModalOpen ? (
+          <div className={styles.modalBackdrop} role="presentation" onClick={() => setRulesModalOpen(false)}>
+            <section
+              className={styles.modalCard}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="liquidity-rules-modal-title"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className={styles.modalHeader}>
+                <div>
+                  <h2 id="liquidity-rules-modal-title" className={styles.title}>Reglas parametrizables</h2>
+                  <p className={styles.sectionHint}>Severidad, decisión y limitaciones operativas del motor lineal de liquidez.</p>
+                </div>
+                <button className={`${styles.btn} ${styles.btnGhost}`} type="button" onClick={() => setRulesModalOpen(false)}>Cerrar</button>
+              </div>
+              <div className={styles.row}>
+                <label className={styles.field}><span className={styles.label}>Baja menor a %</span><input className={styles.input} type="number" value={rules.lowMax} onChange={(e) => setRules((r) => ({ ...r, lowMax: Number(e.target.value) }))} /></label>
+                <label className={styles.field}><span className={styles.label}>Media menor a %</span><input className={styles.input} type="number" value={rules.mediumMax} onChange={(e) => setRules((r) => ({ ...r, mediumMax: Number(e.target.value) }))} /></label>
+                <label className={styles.field}><span className={styles.label}>Alta menor a %</span><input className={styles.input} type="number" value={rules.highMax} onChange={(e) => setRules((r) => ({ ...r, highMax: Number(e.target.value) }))} /></label>
+                <label className={styles.field}><span className={styles.label}>Limitaciones</span><input className={styles.input} value={limitations} onChange={(e) => setLimitations(e.target.value)} /></label>
+                <label className={styles.field}><span className={styles.label}>Decisión baja</span><input className={styles.input} value={rules.decisionLow} onChange={(e) => setRules((r) => ({ ...r, decisionLow: e.target.value }))} /></label>
+                <label className={styles.field}><span className={styles.label}>Decisión media</span><input className={styles.input} value={rules.decisionMedium} onChange={(e) => setRules((r) => ({ ...r, decisionMedium: e.target.value }))} /></label>
+                <label className={styles.field}><span className={styles.label}>Decisión alta</span><input className={styles.input} value={rules.decisionHigh} onChange={(e) => setRules((r) => ({ ...r, decisionHigh: e.target.value }))} /></label>
+                <label className={styles.field}><span className={styles.label}>Decisión crítica</span><input className={styles.input} value={rules.decisionCritical} onChange={(e) => setRules((r) => ({ ...r, decisionCritical: e.target.value }))} /></label>
+              </div>
+            </section>
+          </div>
+        ) : null}
       </div>
     </main>
   );

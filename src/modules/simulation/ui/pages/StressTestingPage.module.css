@@ -229,6 +229,37 @@
   font-weight: 600;
 }
 
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(3, 8, 23, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.modalCard {
+  width: min(1040px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid rgba(120, 158, 255, 0.25);
+  background: rgba(8, 20, 55, 0.96);
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 24px 64px rgba(1, 9, 27, 0.45);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
 .sectionHead {
   display: flex;
   align-items: flex-start;
