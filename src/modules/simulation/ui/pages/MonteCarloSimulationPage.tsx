@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import styles from './MonteCarloSimulationPage.module.css';
 
 type Fund = 'FICI Interval I' | 'FICD Interval I';
@@ -134,6 +135,9 @@ function hashSnapshot(input: object) {
 }
 
 export default function MonteCarloSimulationPage() {
+  const router = useRouter();
+  const [showDistModal, setShowDistModal] = useState(false);
+  const [showRules, setShowRules] = useState(false);
   const [fund, setFund] = useState<Fund>('FICI Interval I');
   const [profile, setProfile] = useState<Profile>('Base');
   const [version, setVersion] = useState(1);
@@ -145,18 +149,18 @@ export default function MonteCarloSimulationPage() {
   const [params, setParams] = useState<Param[]>(ficiParams());
   const [limitations, setLimitations] = useState('Modelo lineal Monte Carlo con supuestos; no reemplaza valoración oficial.');
   const [summary, setSummary] = useState<Record<string, unknown> | null>(null);
-  const [runs, setRuns] = useState<Array<Record<string, unknown>>>(() => {
-    if (typeof window === 'undefined') return [];
-    const raw = localStorage.getItem('kiriox_mc_linear_v1');
-    if (!raw) return [];
-    try {
-      return JSON.parse(raw).runs ?? [];
-    } catch {
-      return [];
-    }
-  });
+  const [runs, setRuns] = useState<Array<Record<string, unknown>>>([]);
   const [runError, setRunError] = useState<string | null>(null);
   const [lastRunAt, setLastRunAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    const raw = localStorage.getItem('kiriox_mc_linear_v1');
+    if (!raw) return;
+    try {
+      const stored = JSON.parse(raw).runs;
+      if (Array.isArray(stored)) setRuns(stored);
+    } catch { /* ignore */ }
+  }, []);
 
   function applyProfile(next: Profile) {
     setProfile(next);
@@ -365,28 +369,42 @@ export default function MonteCarloSimulationPage() {
             <button className={styles.btn} type="button" onClick={randomizeVisibleScenario}>Escenario aleatorio</button>
             <button className={styles.btn} type="button" onClick={runSimulation}>Ejecutar Monte Carlo</button>
             <button className={styles.btn} type="button" onClick={saveRun}>Guardar corrida</button>
+            {summary && (
+              <button className={styles.btn} type="button" onClick={() => setShowDistModal(true)}>Ver distribuciones</button>
+            )}
+            <button
+              type="button"
+              onClick={() => router.push('/gestion/dashboard_simulaciones')}
+              style={{
+                background: 'linear-gradient(135deg, #dc2626, #991b1b)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                padding: '0.4rem 1rem',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Cerrar
+            </button>
           </div>
           {lastRunAt && <div style={{ marginTop: 8, fontSize: 12, color: '#9fb7ec' }}>Última ejecución: {lastRunAt}</div>}
           {runError && <div style={{ marginTop: 8, fontSize: 12, color: '#fca5a5' }}>Error en ejecución: {runError}</div>}
         </section>
 
         {summary && (
-          <>
-            <section className={styles.card}>
-              <h2 className={styles.title}>Resultados estadísticos</h2>
-              <div className={styles.kpi}>
-                {Object.entries(summary).slice(0, 18).map(([k, v]) => (
-                  <div key={k} className={styles.kpiBox}><div className={styles.kpiLabel}>{k}</div><div className={styles.kpiValue}>{Array.isArray(v) ? v.join(', ') : String(typeof v === 'number' ? Number(v).toFixed(4) : v)}</div></div>
-                ))}
-              </div>
-            </section>
-            <section className={styles.card}>
-              <h2 className={styles.title}>Distribución usada por parámetro</h2>
-              <div className={styles.tableWrap}>
-                <table className={styles.table}><thead><tr><th>Nombre técnico</th><th>Etiqueta</th><th>Distribución</th><th>Fuente</th></tr></thead><tbody>{distributionRows.map((r) => <tr key={r.nombre_tecnico}><td>{r.nombre_tecnico}</td><td>{r.etiqueta}</td><td>{r.distribucion}</td><td>{r.fuente}</td></tr>)}</tbody></table>
-              </div>
-            </section>
-          </>
+          <section className={styles.card}>
+            <h2 className={styles.title}>Resultados estadísticos</h2>
+            <div className={styles.kpi}>
+              {Object.entries(summary).slice(0, 18).map(([k, v]) => (
+                <div key={k} className={styles.kpiBox}>
+                  <div className={styles.kpiLabel}>{k.replace(/_/g, ' ')}</div>
+                  <div className={styles.kpiValue}>{Array.isArray(v) ? v.join(', ') : typeof v === 'number' ? (Math.abs(v) >= 1000 ? v.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : v.toFixed(2)) : String(v)}</div>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
         <section className={styles.card}>
@@ -410,13 +428,20 @@ export default function MonteCarloSimulationPage() {
         </section>
 
         <section className={styles.card}>
-          <h2 className={styles.title}>Reglas parametrizables</h2>
-          <div className={styles.row}>
-            <label className={styles.field}><span className={styles.label}>Baja menor a %</span><input className={styles.input} type="number" value={rules.lowMax} onChange={(e) => setRules((r) => ({ ...r, lowMax: Number(e.target.value) }))} /></label>
-            <label className={styles.field}><span className={styles.label}>Media menor a %</span><input className={styles.input} type="number" value={rules.mediumMax} onChange={(e) => setRules((r) => ({ ...r, mediumMax: Number(e.target.value) }))} /></label>
-            <label className={styles.field}><span className={styles.label}>Alta menor a %</span><input className={styles.input} type="number" value={rules.highMax} onChange={(e) => setRules((r) => ({ ...r, highMax: Number(e.target.value) }))} /></label>
-            <label className={styles.field}><span className={styles.label}>Limitaciones</span><input className={styles.input} value={limitations} onChange={(e) => setLimitations(e.target.value)} /></label>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showRules ? 12 : 0 }}>
+            <h2 className={styles.title} style={{ margin: 0 }}>Reglas parametrizables</h2>
+            <button className={styles.btn} type="button" onClick={() => setShowRules((v) => !v)}>
+              {showRules ? 'Ocultar' : 'Ver reglas'}
+            </button>
           </div>
+          {showRules && (
+            <div className={styles.row}>
+              <label className={styles.field}><span className={styles.label}>Baja menor a %</span><input className={styles.input} type="number" value={rules.lowMax} onChange={(e) => setRules((r) => ({ ...r, lowMax: Number(e.target.value) }))} /></label>
+              <label className={styles.field}><span className={styles.label}>Media menor a %</span><input className={styles.input} type="number" value={rules.mediumMax} onChange={(e) => setRules((r) => ({ ...r, mediumMax: Number(e.target.value) }))} /></label>
+              <label className={styles.field}><span className={styles.label}>Alta menor a %</span><input className={styles.input} type="number" value={rules.highMax} onChange={(e) => setRules((r) => ({ ...r, highMax: Number(e.target.value) }))} /></label>
+              <label className={styles.field}><span className={styles.label}>Limitaciones</span><input className={styles.input} value={limitations} onChange={(e) => setLimitations(e.target.value)} /></label>
+            </div>
+          )}
         </section>
 
         <section className={styles.card}>
@@ -425,7 +450,46 @@ export default function MonteCarloSimulationPage() {
             <table className={styles.table}><thead><tr><th>Fecha</th><th>Perfil</th><th>Versión</th><th>Semilla</th><th>Hash</th><th>Usuario</th></tr></thead><tbody>{runs.map((r: any) => <tr key={r.id}><td>{new Date(r.fecha_ejecucion).toLocaleString()}</td><td>{r.profile}</td><td>{r.version_perfil}</td><td>{r.semilla_aleatoria}</td><td>{r.parameter_hash}</td><td>{r.usuario}</td></tr>)}</tbody></table>
           </div>
         </section>
+
       </div>
+
+      {showDistModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={() => setShowDistModal(false)}
+        >
+          <div
+            style={{ background: '#0a1638', border: '1px solid rgba(109,143,235,0.35)', borderRadius: 14, padding: 24, maxWidth: 900, width: '100%', maxHeight: '80vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#e7f0ff' }}>Distribución usada por parámetro</h2>
+              <button
+                type="button"
+                onClick={() => setShowDistModal(false)}
+                style={{ background: 'linear-gradient(135deg,#dc2626,#991b1b)', color: '#fff', border: 'none', borderRadius: 6, padding: '0.3rem 0.9rem', fontWeight: 700, cursor: 'pointer', fontSize: 12 }}
+              >
+                Cerrar
+              </button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table className={styles.table}>
+                <thead><tr><th>Nombre técnico</th><th>Etiqueta</th><th>Distribución</th><th>Fuente</th></tr></thead>
+                <tbody>
+                  {distributionRows.map((r) => (
+                    <tr key={r.nombre_tecnico}>
+                      <td>{r.nombre_tecnico}</td>
+                      <td>{r.etiqueta}</td>
+                      <td>{r.distribucion}</td>
+                      <td>{r.fuente}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
