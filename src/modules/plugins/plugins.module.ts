@@ -1,0 +1,27 @@
+import type { KirioxModuleContract } from "@/shared/contracts/modules/module.contract";
+
+export const pluginsModule: KirioxModuleContract = {
+  manifest: {
+    id: "plugins",
+    name: "Plugins",
+    version: "0.1.0",
+    description: "Gestión y administración de extensiones y plugins del sistema.",
+    status: "active",
+    layers: ["application", "infrastructure", "ui"],
+    dependencies: ["core"],
+    nav: {
+      label: "Extensiones",
+      href: "/gestion/dashboard_plugins",
+      icon: "Puzzle",
+      order: 90,
+    },
+  },
+
+  register() {
+    return;
+  },
+
+  activate() {
+    return;
+  },
+};

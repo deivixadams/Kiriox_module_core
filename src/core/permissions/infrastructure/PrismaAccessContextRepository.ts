@@ -8,7 +8,7 @@ import type { AccessContext, ModuleCode } from '@/shared/types';
 const ALL_MODULES: ModuleCode[] = [
   'core', 'governance', 'security', 'benchmark',
   'linear-risk', 'structural-risk', 'audit', 'alerts', 'simulation', 'catalog',
-  'company', 'monitoring', 'hechos-relevantes', 'reportes',
+  'company', 'monitoring', 'hechos-relevantes', 'reportes', 'plugins',
 ];
 
 function isMissingRelation(error: unknown, table: string): boolean {

@@ -1,0 +1,283 @@
+.dashboard {
+  min-height: 100vh;
+  padding: 2rem;
+  color: #fff;
+}
+
+.header {
+  margin-bottom: 1.75rem;
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.title {
+  margin: 0 0 0.45rem;
+  font-size: 2.15rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(to right, #fff, #94a3b8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 780px;
+  color: #94a3b8;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.installButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  border-radius: 10px;
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  color: #fff;
+  padding: 0.8rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.installGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.45rem;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
+.installFeedback {
+  margin: 0;
+  max-width: 320px;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.summaryCard {
+  border: 1px solid rgba(129, 140, 248, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.78), rgba(2, 6, 23, 0.92));
+  backdrop-filter: blur(12px);
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.summaryLabel {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summaryValue {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.pluginGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1.5rem;
+}
+
+.pluginCard {
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.8), rgba(2, 6, 23, 0.9));
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  border-radius: 16px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.pluginCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.pluginIcon {
+  width: 48px;
+  height: 48px;
+  background: rgba(129, 140, 248, 0.1);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #818cf8;
+}
+
+.statusBadge {
+  font-size: 0.73rem;
+  padding: 0.22rem 0.7rem;
+  border-radius: 99px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.statusInstalled {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.22);
+}
+
+.statusActive {
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.pluginInfo h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.pluginDescription {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.descriptionLabel {
+  margin: 0 0 0.3rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metaGroup {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.version {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.author {
+  font-size: 0.85rem;
+  color: #818cf8;
+}
+
+.pluginMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.permissionMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.metaLabel {
+  color: #64748b;
+  font-size: 0.74rem;
+}
+
+.metaValue {
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.actionGroup {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.primaryActionButton,
+.secondaryActionButton {
+  background: rgba(129, 140, 248, 0.1);
+  color: #818cf8;
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.primaryActionButton {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(79, 70, 229, 0.95));
+  color: #fff;
+  border-color: rgba(129, 140, 248, 0.35);
+}
+
+.secondaryActionButton {
+  background: rgba(15, 23, 42, 0.55);
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.primaryActionButton:hover {
+  filter: brightness(1.06);
+}
+
+.secondaryActionButton:hover {
+  border-color: rgba(148, 163, 184, 0.38);
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .summaryGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .headerRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 640px) {
+  .dashboard {
+    padding: 1.25rem;
+  }
+
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .pluginGrid {
+    grid-template-columns: 1fr;
+  }
+}

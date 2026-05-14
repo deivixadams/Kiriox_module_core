@@ -8,7 +8,8 @@ export type KirioxOfficialModuleId =
   | "simulation"
   | "catalog"
   | "company"
-  | "reportes";
+  | "reportes"
+  | "plugins";
 
 export type KirioxModuleStatus =
   | "active"

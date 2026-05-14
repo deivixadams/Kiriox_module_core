@@ -8,7 +8,7 @@ import {
   Activity, Archive, BarChart3, Bell, Binary, BookOpen, BriefcaseBusiness,
   Building2, CalendarRange, CalendarCheck2, CheckSquare, ChevronDown,
   ClipboardCheck, Clock3, Cpu, FileText, FlaskConical, GitBranch, History,
-  Home, Layers, Map, LayoutDashboard, ListChecks, Network, Radar, Scale,
+  Home, Layers, Map, LayoutDashboard, ListChecks, Network, Puzzle, Radar, Scale,
   Settings, Shield, ShieldAlert, ShieldPlus, ShieldX, SlidersHorizontal,
   Target, Trophy, UserRoundCheck, Users, Workflow,
 } from "lucide-react";
@@ -19,7 +19,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ size?: number; color?: stri
   SlidersHorizontal, GitBranch, Cpu, Bell, FlaskConical, Trophy, History,
   Archive, Clock3, BriefcaseBusiness, CalendarCheck2, Users, ListChecks,
   UserRoundCheck, CheckSquare, Activity, ShieldX, Binary, Building2, Target,
-  Settings, Workflow, CalendarRange, ShieldPlus, Home, Radar, Layers, Map,
+  Settings, Workflow, CalendarRange, ShieldPlus, Home, Puzzle, Radar, Layers, Map,
   FileText, BookOpen,
 };
 

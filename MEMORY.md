@@ -110,3 +110,14 @@ Schema Engine        : schema-engine-cli 3c6e192761c0362d496ed980de936e2f3cebcd3
 Default Engines Hash : 3c6e192761c0362d496ed980de936e2f3cebcd3a
 Studio               : 0.27.3
 
+## 2026-05-13 — Aprendizaje
+
+**Contexto:** Implementación del módulo administrativo `plugins` y preparación del sistema para instalación de extensiones empaquetadas.
+
+**Regla aprendida 1:** En Kiriox, registrar un módulo en `core-bootstrap` y en el `module-registry` no basta para que aparezca en el menú. Para que una entrada de navegación sea visible, el módulo debe existir también en `ModuleCode`, en la lista efectiva de `enabledModules` del `AccessContextRepository`, y su icono debe estar resuelto en el `Sidebar`.
+
+**Aplicación futura 1:** Cada vez que se agregue un módulo oficial nuevo, validar de forma explícita este pipeline de exposición: `module.contract` -> `core-bootstrap` -> `enabledModules` -> `buildNavigation` -> `Sidebar icon map`. Si falta uno, el módulo queda “registrado” pero no visible.
+
+**Regla aprendida 2:** Un sistema de plugins por contrato no debe instalar paquetes directamente en runtime sin cuarentena. El flujo correcto y reusable es: recibir `.zip` -> guardar paquete -> descomprimir en `quarantine/` -> validar `plugin.manifest.json` -> validar permisos, versión semver, dependencias y `extensionPoints` -> mover a `plugins/installed/` -> cargar `index.ts` sólo si el contrato exportado coincide con el manifiesto y cumple el `KirioxPluginContract`.
+
+**Aplicación futura 2:** Toda futura capacidad de extensibilidad debe usar staging en disco (`packages/`, `quarantine/`, `installed/`) y validación contractual previa a la activación. No mezclar “subida de archivo”, “instalación” y “activación” en un solo paso opaco.

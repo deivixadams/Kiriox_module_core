@@ -1,8 +1,36 @@
+export const KIRIOX_PLUGIN_STATUSES = [
+  "installed",
+  "active",
+  "disabled",
+  "quarantined",
+] as const;
+
 export type KirioxPluginStatus =
   | "installed"
   | "active"
   | "disabled"
   | "quarantined";
+
+export const KIRIOX_PLUGIN_PERMISSIONS = [
+  "read:company",
+  "write:company",
+  "read:element",
+  "write:element",
+  "read:activity",
+  "write:activity",
+  "read:risk",
+  "write:risk",
+  "read:control",
+  "write:control",
+  "read:evidence",
+  "write:evidence",
+  "read:test",
+  "write:test",
+  "export:data",
+  "register:ui",
+  "register:command",
+  "listen:events",
+] as const;
 
 export type KirioxPluginPermission =
   | "read:company"
@@ -24,6 +52,15 @@ export type KirioxPluginPermission =
   | "register:command"
   | "listen:events";
 
+export const KIRIOX_PLUGIN_EXTENSION_POINTS = [
+  "navigation:item",
+  "dashboard:widget",
+  "risk:panel",
+  "control:panel",
+  "evidence:panel",
+  "report:exporter",
+] as const;
+
 export type KirioxPluginExtensionPoint =
   | "navigation:item"
   | "dashboard:widget"
@@ -37,6 +74,7 @@ export interface KirioxPluginManifest {
   name: string;
   version: string;
   description?: string;
+  author?: string;
   status: KirioxPluginStatus;
   permissions: KirioxPluginPermission[];
   extensionPoints: KirioxPluginExtensionPoint[];

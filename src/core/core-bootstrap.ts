@@ -7,6 +7,7 @@ import { registerStructuralRiskModule } from "@/core/module-registry/register-st
 import { registerMonitoringModule } from "@/core/module-registry/register-monitoring-module";
 import { registerHechosRelevantesModule } from "@/core/module-registry/register-hechos-relevantes-module";
 import { registerReportesModule } from "@/core/module-registry/register-reportes-module";
+import { registerPluginsModule } from "@/core/module-registry/register-plugins-module";
 
 let bootstrapped = false;
 
@@ -24,6 +25,7 @@ export function bootstrapCore(): void {
   registerMonitoringModule();
   registerHechosRelevantesModule();
   registerReportesModule();
+  registerPluginsModule();
 
   bootstrapped = true;
 }

@@ -12,7 +12,8 @@ export type ModuleCode =
   | 'company'
   | 'monitoring'
   | 'hechos-relevantes'
-  | 'reportes';
+  | 'reportes'
+  | 'plugins';
 
 export type AccessRequirement = {
   module: ModuleCode;
