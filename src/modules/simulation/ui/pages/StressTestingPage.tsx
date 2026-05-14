@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import styles from './StressTestingPage.module.css';
 
 type FundType = 'FICI Interval I' | 'FICD Interval I';
@@ -57,6 +58,8 @@ type RunRecord = {
 
 const USER = 'dev@kiriox.local';
 const STORAGE_KEY = 'kiriox_stress_testing_v1';
+const AUTO_SIMULATION_TARGET = 3000;
+const RUN_HISTORY_LIMIT = 10;
 
 const BASE_VALUES: Record<FundType, { baseValue: number; cuotaBase: number }> = {
   'FICI Interval I': { baseValue: 100_000_000, cuotaBase: 100 },
@@ -142,25 +145,42 @@ function computeResults(fund: FundType, params: Parameter[], rules: Rules) {
 }
 
 export default function StressTestingPage() {
+  const router = useRouter();
   const [fund, setFund] = useState<FundType>('FICI Interval I');
   const [profile, setProfile] = useState<ProfileName>('Moderado');
   const [profileVersion, setProfileVersion] = useState(1);
+  const [simulationSpeed, setSimulationSpeed] = useState(6);
   const [parameters, setParameters] = useState<Parameter[]>(createFiciParams());
   const [rules, setRules] = useState<Rules>(DEFAULT_RULES);
   const [limitations, setLimitations] = useState('Modelo simplificado para apoyo de decisión; no reemplaza valoración oficial.');
+  const [autoSimulation, setAutoSimulation] = useState({ running: false, completed: 0, target: AUTO_SIMULATION_TARGET });
   const [runs, setRuns] = useState<RunRecord[]>(() => {
     if (typeof window === 'undefined') return [];
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     try {
       const parsed = JSON.parse(raw) as { runs: RunRecord[] };
-      return parsed.runs ?? [];
+      return (parsed.runs ?? []).slice(0, RUN_HISTORY_LIMIT);
     } catch {
       return [];
     }
   });
+  const autoStopRef = useRef(false);
+  const simulationSpeedRef = useRef(simulationSpeed);
 
   const result = useMemo(() => computeResults(fund, parameters, rules), [fund, parameters, rules]);
+
+  function getAutoSimulationDelay(speed: number) {
+    const minDelay = 12;
+    const maxDelay = 650;
+    return Math.round(maxDelay - ((speed - 1) / 9) * (maxDelay - minDelay));
+  }
+
+  function getAutoSimulationBatchSize(speed: number) {
+    const minBatch = 1;
+    const maxBatch = 45;
+    return Math.round(minBatch + ((speed - 1) / 9) * (maxBatch - minBatch));
+  }
 
   function handleFundChange(nextFund: FundType) {
     setFund(nextFund);
@@ -190,6 +210,14 @@ export default function StressTestingPage() {
     setProfileVersion((v) => v + 1);
   }
 
+  function updateParamValue(idx: number, value: string) {
+    updateParam(idx, 'value', value);
+  }
+
+  function updateParamJustification(idx: number, value: string) {
+    updateParam(idx, 'justification', value);
+  }
+
   function saveCurrentRun() {
     const snapshot: ProfileSnapshot = {
       version: profileVersion,
@@ -213,9 +241,17 @@ export default function StressTestingPage() {
       explanation: result.executiveExplanation,
       limitations,
     };
-    const next = [record, ...runs].slice(0, 50);
+    const next = [record, ...runs].slice(0, RUN_HISTORY_LIMIT);
     setRuns(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ runs: next }));
+  }
+
+  function persistRuns(nextRuns: RunRecord[] | ((prev: RunRecord[]) => RunRecord[])) {
+    setRuns((prev) => {
+      const resolved = (typeof nextRuns === 'function' ? nextRuns(prev) : nextRuns).slice(0, RUN_HISTORY_LIMIT);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ runs: resolved }));
+      return resolved;
+    });
   }
 
   function randomizeScenario() {
@@ -231,11 +267,126 @@ export default function StressTestingPage() {
     setProfileVersion((v) => v + 1);
   }
 
+  function buildRandomizedParameters(sourceParams: Parameter[]): Parameter[] {
+    return sourceParams.map((p) => ({
+      ...p,
+      value: Number((p.min + Math.random() * (p.max - p.min)).toFixed(4)),
+      source: 'supuesto_hipotetico',
+      justification: p.justification || 'Simulación automatizada',
+    }));
+  }
+
+  function buildRunRecord(nextParams: Parameter[], nextResult: ReturnType<typeof computeResults>, nextVersion: number): RunRecord {
+    const snapshot: ProfileSnapshot = {
+      version: nextVersion,
+      fund,
+      profile: 'Personalizado',
+      updatedAt: new Date().toISOString(),
+      parameters: nextParams,
+      rules,
+    };
+
+    return {
+      id: crypto.randomUUID(),
+      fund,
+      profile: 'Personalizado',
+      profileVersion: nextVersion,
+      executedAt: new Date().toISOString(),
+      user: USER,
+      parameterHash: hashSnapshot(snapshot),
+      parameters: nextParams,
+      result: nextResult,
+      explanation: nextResult.executiveExplanation,
+      limitations,
+    };
+  }
+
+  function stopAutoSimulation() {
+    autoStopRef.current = true;
+    setAutoSimulation((prev) => ({ ...prev, running: false }));
+  }
+
+  function startAutoSimulation() {
+    if (autoSimulation.running) return;
+
+    autoStopRef.current = false;
+    setProfile('Personalizado');
+    setAutoSimulation({ running: true, completed: 0, target: AUTO_SIMULATION_TARGET });
+
+    let completed = 0;
+    let versionCursor = profileVersion;
+    let currentParamsCursor = parameters;
+
+    const tick = () => {
+      if (autoStopRef.current) return;
+
+      const currentSpeed = simulationSpeedRef.current;
+      const remaining = AUTO_SIMULATION_TARGET - completed;
+      const batchCount = Math.min(getAutoSimulationBatchSize(currentSpeed), remaining);
+      let latestParams = currentParamsCursor;
+      const batchRecords: RunRecord[] = [];
+
+      for (let i = 0; i < batchCount; i += 1) {
+        versionCursor += 1;
+        const nextParams = buildRandomizedParameters(latestParams);
+        const nextResult = computeResults(fund, nextParams, rules);
+        batchRecords.push(buildRunRecord(nextParams, nextResult, versionCursor));
+        latestParams = nextParams;
+      }
+
+      completed += batchCount;
+      currentParamsCursor = latestParams;
+      setParameters(latestParams);
+      setProfileVersion(versionCursor);
+      setAutoSimulation({ running: completed < AUTO_SIMULATION_TARGET, completed, target: AUTO_SIMULATION_TARGET });
+      persistRuns((prev) => [...batchRecords.reverse(), ...prev].slice(0, RUN_HISTORY_LIMIT));
+
+      if (completed < AUTO_SIMULATION_TARGET) {
+        setTimeout(tick, getAutoSimulationDelay(simulationSpeedRef.current));
+      } else {
+        autoStopRef.current = true;
+      }
+    };
+
+    setTimeout(tick, 0);
+  }
+
+  useEffect(() => {
+    simulationSpeedRef.current = simulationSpeed;
+  }, [simulationSpeed]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as { runs: RunRecord[] };
+      const storedRuns = parsed.runs ?? [];
+      const trimmed = storedRuns.slice(0, RUN_HISTORY_LIMIT);
+      if (trimmed.length !== storedRuns.length) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ runs: trimmed }));
+      }
+    } catch {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      autoStopRef.current = true;
+    };
+  }, []);
+
   return (
     <main className={styles.page}>
       <div className={styles.wrap}>
         <section className={styles.card}>
           <h1 className={styles.title}>Stress testing parametrizable</h1>
+          <div className={styles.metaRow}>
+            <span className={styles.metaPill}>Perfil v{profileVersion}</span>
+            <span className={styles.metaPill}>{USER}</span>
+            <span className={styles.metaPill}>{parameters.length} supuestos activos</span>
+          </div>
           <div className={styles.row}>
             <label className={styles.field}><span className={styles.label}>Fondo</span>
               <select className={styles.select} value={fund} onChange={(e) => handleFundChange(e.target.value as FundType)}>
@@ -248,16 +399,38 @@ export default function StressTestingPage() {
                 <option>Conservador</option><option>Moderado</option><option>Severo</option><option>Extremo</option><option>Personalizado</option>
               </select>
             </label>
-            <label className={styles.field}><span className={styles.label}>Versión perfil</span>
-              <input className={styles.input} value={profileVersion} readOnly />
-            </label>
-            <label className={styles.field}><span className={styles.label}>Usuario</span>
-              <input className={styles.input} value={USER} readOnly />
-            </label>
           </div>
           <div className={styles.actions} style={{ marginTop: 10 }}>
             <button className={styles.btn} type="button" onClick={randomizeScenario}>Simular</button>
+            <button
+              className={`${styles.btn} ${autoSimulation.running ? styles.btnDanger : styles.btnSuccess}`}
+              type="button"
+              onClick={autoSimulation.running ? stopAutoSimulation : startAutoSimulation}
+            >
+              {autoSimulation.running ? 'Stop' : 'Auto simular'}
+            </button>
             <button className={styles.btn} type="button" onClick={saveCurrentRun}>Guardar corrida</button>
+            <button className={`${styles.btn} ${styles.btnGhost}`} type="button" onClick={() => router.push('/gestion/dashboard_simulaciones')}>Cerrar</button>
+            <label className={styles.speedControl}>
+              <span className={styles.speedLabel}>Velocidad</span>
+              <input
+                className={styles.speedSlider}
+                type="range"
+                min="1"
+                max="10"
+                step="1"
+                value={simulationSpeed}
+                onChange={(e) => setSimulationSpeed(Number(e.target.value))}
+              />
+              <span className={styles.speedValue}>{simulationSpeed}</span>
+            </label>
+          </div>
+          <div className={styles.liveStatus}>
+            {autoSimulation.running
+              ? `Auto simulación en curso: ${autoSimulation.completed.toLocaleString()} / ${autoSimulation.target.toLocaleString()} corridas · velocidad ${simulationSpeed}/10`
+              : autoSimulation.completed > 0
+                ? `Última auto simulación: ${autoSimulation.completed.toLocaleString()} corridas procesadas · velocidad ${simulationSpeed}/10`
+                : 'Modo manual activo'}
           </div>
         </section>
 
@@ -270,38 +443,51 @@ export default function StressTestingPage() {
             <div className={styles.kpiBox}><div className={styles.kpiLabel}>Impacto por cuota</div><div className={styles.kpiValue}>{result.impactPerShare}</div></div>
             <div className={styles.kpiBox}><div className={styles.kpiLabel}>Severidad</div><div className={styles.kpiValue}>{result.severity}</div></div>
             <div className={styles.kpiBox}><div className={styles.kpiLabel}>Decisión sugerida</div><div className={styles.kpiValue}>{result.suggestedDecision}</div></div>
-            <div className={styles.kpiBox}><div className={styles.kpiLabel}>Explicación ejecutiva</div><div className={styles.kpiValue}>{result.executiveExplanation}</div></div>
+          </div>
+          <div className={styles.executiveBox}>
+            <div className={styles.executiveLabel}>Explicación ejecutiva</div>
+            <div className={styles.executiveText}>{result.executiveExplanation}</div>
           </div>
         </section>
 
         <section className={styles.card}>
-          <h2 className={styles.title}>Parámetros de escenario</h2>
+          <div className={styles.sectionHead}>
+            <div>
+              <h2 className={styles.title}>Parámetros de escenario</h2>
+              <p className={styles.sectionHint}>Se editan sólo los supuestos operativos necesarios para ejecutar la corrida. La metadata técnica del modelo queda gobernada por el sistema.</p>
+            </div>
+          </div>
           <div className={styles.grid}>
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Nombre técnico</th><th>Etiqueta</th><th>Descripción</th><th>Unidad</th><th>Valor</th><th>Mín</th><th>Máx</th><th>Escenario</th><th>Justificación</th><th>Fuente</th>
+                  <th>Parámetro</th><th>Descripción</th><th>Unidad</th><th>Valor</th><th>Rango</th><th>Justificación</th>
                 </tr>
               </thead>
               <tbody>
                 {parameters.map((p, idx) => (
                   <tr key={p.key}>
-                    <td>{p.technicalName}</td>
-                    <td><input className={styles.input} value={p.label} onChange={(e) => updateParam(idx, 'label', e.target.value)} /></td>
-                    <td><input className={styles.input} value={p.description} onChange={(e) => updateParam(idx, 'description', e.target.value)} /></td>
-                    <td><input className={styles.input} value={p.unit} onChange={(e) => updateParam(idx, 'unit', e.target.value)} /></td>
-                    <td><input className={styles.input} type="number" value={p.value} onChange={(e) => updateParam(idx, 'value', e.target.value)} /></td>
-                    <td><input className={styles.input} type="number" value={p.min} onChange={(e) => updateParam(idx, 'min', e.target.value)} /></td>
-                    <td><input className={styles.input} type="number" value={p.max} onChange={(e) => updateParam(idx, 'max', e.target.value)} /></td>
-                    <td><input className={styles.input} value={p.scenario} onChange={(e) => updateParam(idx, 'scenario', e.target.value)} /></td>
-                    <td><input className={styles.input} value={p.justification} onChange={(e) => updateParam(idx, 'justification', e.target.value)} /></td>
                     <td>
-                      <select className={styles.select} value={p.source} onChange={(e) => updateParam(idx, 'source', e.target.value)}>
-                        <option value="publico">publico</option>
-                        <option value="usuario">usuario</option>
-                        <option value="supuesto_hipotetico">supuesto hipotético</option>
-                        <option value="modelo_interno">modelo interno</option>
-                      </select>
+                      <div className={styles.paramName}>{p.label}</div>
+                      <div className={styles.paramMeta}>{p.technicalName}</div>
+                    </td>
+                    <td>
+                      <div className={styles.paramDescription}>{p.description}</div>
+                      <div className={styles.paramMeta}>{p.scenario} · {p.source.replaceAll('_', ' ')}</div>
+                    </td>
+                    <td>{p.unit}</td>
+                    <td>
+                      <input className={styles.input} type="number" value={p.value} onChange={(e) => updateParamValue(idx, e.target.value)} />
+                    </td>
+                    <td>
+                      <div className={styles.rangeBox}>
+                        <span>{p.min}</span>
+                        <span className={styles.rangeSeparator}>a</span>
+                        <span>{p.max}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <input className={styles.input} value={p.justification} onChange={(e) => updateParamJustification(idx, e.target.value)} />
                     </td>
                   </tr>
                 ))}
@@ -334,7 +520,7 @@ export default function StressTestingPage() {
                 </tr>
               </thead>
               <tbody>
-                {runs.map((r) => (
+                {runs.slice(0, RUN_HISTORY_LIMIT).map((r) => (
                   <tr key={r.id}>
                     <td>{new Date(r.executedAt).toLocaleString()}</td>
                     <td>{r.fund}</td>

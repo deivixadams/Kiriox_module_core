@@ -2,21 +2,21 @@
   min-height: 100vh;
   background: linear-gradient(180deg, #0b1738 0%, #071129 100%);
   color: #e5efff;
-  padding: 20px;
+  padding: 24px 20px 40px;
 }
 
 .wrap {
-  max-width: 1500px;
+  width: min(1280px, 100%);
   margin: 0 auto;
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .card {
   border: 1px solid rgba(120, 158, 255, 0.25);
   background: rgba(8, 20, 55, 0.82);
   border-radius: 14px;
-  padding: 14px;
+  padding: 16px;
 }
 
 .title {
@@ -25,9 +25,28 @@
   font-weight: 800;
 }
 
+.metaRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+}
+
+.metaPill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(122, 160, 255, 0.24);
+  background: rgba(15, 33, 78, 0.76);
+  color: #9db5ea;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
   gap: 10px;
 }
 
@@ -66,6 +85,7 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  min-width: 960px;
 }
 
 .table th,
@@ -94,6 +114,7 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .btn {
@@ -107,9 +128,62 @@
   cursor: pointer;
 }
 
+.btnSuccess {
+  border-color: rgba(52, 211, 153, 0.4);
+  background: linear-gradient(180deg, rgba(21, 128, 61, 0.48), rgba(22, 101, 52, 0.38));
+}
+
+.btnDanger {
+  border-color: rgba(248, 113, 113, 0.42);
+  background: linear-gradient(180deg, rgba(185, 28, 28, 0.5), rgba(153, 27, 27, 0.38));
+}
+
+.btnGhost {
+  border-color: rgba(122, 160, 255, 0.22);
+  background: rgba(15, 33, 78, 0.58);
+}
+
+.speedControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(122, 160, 255, 0.22);
+  background: rgba(15, 33, 78, 0.52);
+}
+
+.speedLabel {
+  color: #9db5ea;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.speedSlider {
+  width: 140px;
+  accent-color: #60a5fa;
+  cursor: pointer;
+}
+
+.speedValue {
+  min-width: 24px;
+  color: #e7f0ff;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.liveStatus {
+  margin-top: 10px;
+  color: #9db5ea;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .kpi {
   display: grid;
-  grid-template-columns: repeat(7, minmax(100px, 1fr));
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
   gap: 10px;
 }
 
@@ -131,6 +205,79 @@
   font-weight: 800;
 }
 
+.executiveBox {
+  margin-top: 12px;
+  border: 1px solid rgba(122, 160, 255, 0.18);
+  background: rgba(15, 33, 78, 0.58);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.executiveLabel {
+  font-size: 11px;
+  color: #9db5ea;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.executiveText {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #e7f0ff;
+  font-weight: 600;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.sectionHint {
+  margin: 4px 0 0;
+  color: #9db5ea;
+  font-size: 12px;
+  line-height: 1.45;
+  max-width: 780px;
+}
+
+.paramName {
+  color: #e7f0ff;
+  font-weight: 700;
+}
+
+.paramDescription {
+  color: #d5e3ff;
+}
+
+.paramMeta {
+  margin-top: 3px;
+  color: #7f97c9;
+  font-size: 11px;
+}
+
+.rangeBox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(122, 160, 255, 0.18);
+  background: rgba(15, 33, 78, 0.58);
+  padding: 5px 10px;
+  color: #d9e7ff;
+  font-weight: 700;
+}
+
+.rangeSeparator {
+  color: #7f97c9;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
 @media (max-width: 1100px) {
   .row {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
@@ -138,5 +285,19 @@
 
   .kpi {
     grid-template-columns: repeat(2, minmax(100px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 16px 12px 28px;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi {
+    grid-template-columns: 1fr;
   }
 }

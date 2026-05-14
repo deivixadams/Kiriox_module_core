@@ -4,6 +4,19 @@
 import React, { useEffect, useState } from 'react';
 import { BarChart3, ClipboardList, Info, Plus } from 'lucide-react';
 import { CARD, ErrorAlert, extractError, INPUT_S, LABEL_S, LoaderSection, SaveButton, SECTION_HDR, TEXTAREA_S } from './ContextWizardShared';
+import { AiFieldAssist } from '@/shared/ai';
+import type { AiFieldContract } from '@/shared/ai';
+
+const DESCRIPCION_RIESGO_CONTRACT: AiFieldContract = {
+  module: 'linear-risk',
+  field: 'description',
+  intent: 'complete',
+  minWords: 10,
+  maxWords: 25,
+  tone: 'tecnico',
+  output: 'text',
+  requiredMeaning: ['riesgo', 'impacto'],
+};
 
 type AnalysisItem = {
   id: string;
@@ -300,12 +313,17 @@ export function StepAnalisisRiesgo({ runRaId }: { runRaId: string }) {
             </span>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '0.6rem', marginBottom: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <input
-            style={{ ...INPUT_S, fontSize: '0.74rem', width: '100%' }}
+            style={{ ...INPUT_S, fontSize: '0.74rem', flex: '0 0 72%' }}
             placeholder="Descripción del riesgo"
             value={form.description}
             onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+          />
+          <AiFieldAssist
+            contract={DESCRIPCION_RIESGO_CONTRACT}
+            currentValue={form.description || form.name}
+            onAccept={(value) => setForm((f) => ({ ...f, description: value }))}
           />
         </div>
         {error && <ErrorAlert message={error} />}

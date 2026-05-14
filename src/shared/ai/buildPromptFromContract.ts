@@ -22,13 +22,21 @@ const TONE_TAG: Record<string, string> = {
  * System context already lives in the session's initialPrompts.
  */
 export function buildPromptFromContract(contract: AiRunInput): string {
-  const verb  = INTENT_VERB[contract.intent] ?? 'Completa';
   const max   = contract.maxWords ?? 30;
   const tone  = contract.tone ? ` (${TONE_TAG[contract.tone]})` : '';
   const extra = contract.requiredMeaning?.length
     ? `\nIncluye: ${contract.requiredMeaning.slice(0, 3).join(', ')}.`
     : '';
 
-  // Single instruction + input — no metadata, no module names, no verbose rules
-  return `${verb}${tone}, máximo ${max} palabras:\n${contract.input}${extra}`;
+  // When completing and the user has already typed meaningful text (>2 words),
+  // instruct the model to extend it and return the full result — not replace it.
+  const hasUserText =
+    contract.intent === 'complete' &&
+    contract.input.trim().split(/\s+/).length > 2;
+
+  const instruction = hasUserText
+    ? `Continúa y completa este texto${tone}, devuelve el texto completo, máximo ${max} palabras`
+    : `${INTENT_VERB[contract.intent] ?? 'Completa'}${tone}, máximo ${max} palabras`;
+
+  return `${instruction}:\n${contract.input}${extra}`;
 }

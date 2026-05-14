@@ -9,6 +9,12 @@ import {
 
 export class PrismaLinearRiskRepository implements LinearRiskRepository {
   private riskAppetiteCatalogExists: boolean | null = null;
+  private readonly uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  private asUuid(value: unknown): string | null {
+    const str = String(value ?? '').trim();
+    return this.uuidPattern.test(str) ? str : null;
+  }
 
   private resolveRiskLevel(
     score: number | null,
@@ -619,16 +625,47 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
   async upsertRisk(runRaId: string, riskData: any, companyId: string, userId: string) {
     const { id: riskId, name, description, risk_category, cause, event, consequence, objective_id, activity_id, owner_id, impact_id, probability_id, peso_id, control_ids } = riskData;
 
+    const objectiveId = this.asUuid(objective_id);
+    const riskCategoryId = this.asUuid(risk_category);
+    const ownerId = this.asUuid(owner_id);
+    const activityId = this.asUuid(activity_id);
+    const existingRiskId = this.asUuid(riskId);
+    const impactId = String(impact_id ?? '').trim();
+    const probabilityId = String(probability_id ?? '').trim();
+    const pesoIdRaw = Number(peso_id);
+    const normalizedControlIds = Array.isArray(control_ids)
+      ? control_ids.map((ctrlId) => this.asUuid(ctrlId)).filter((ctrlId): ctrlId is string => Boolean(ctrlId))
+      : [];
+
+    const defaults = await prisma.$queryRaw<Array<{ activity_id: string | null; owner_id: string | null }>>(Prisma.sql`
+      SELECT
+        gc.activity_id::text AS activity_id,
+        r.owner_id::text AS owner_id
+      FROM public.run_ra r
+      LEFT JOIN public.run_ra_contexto_evaluacion gc ON gc.run_ra_id = r.id
+      WHERE r.id = ${runRaId}::uuid
+      LIMIT 1
+    `);
+    const defaultActivityId = this.asUuid(defaults[0]?.activity_id);
+    const defaultOwnerId = this.asUuid(defaults[0]?.owner_id);
+    const effectiveActivityId = activityId ?? defaultActivityId;
+    const effectiveOwnerId = ownerId ?? defaultOwnerId ?? userId;
+
+    if (!String(name ?? '').trim() || !String(cause ?? '').trim() || !String(event ?? '').trim() || !String(consequence ?? '').trim() || !objectiveId || !effectiveActivityId || !effectiveOwnerId || !impactId || !probabilityId || !Number.isInteger(pesoIdRaw)) {
+      throw new Error('Completa nombre, causa, evento, consecuencia, objetivo afectado, impacto, probabilidad y peso. Además define actividad en el paso 1.');
+    }
+
     const objectiveRows = await prisma.$queryRaw<any[]>(Prisma.sql`
       SELECT objective_name FROM public.company_objective
-      WHERE objective_id = ${objective_id}::uuid AND company_id = ${companyId}::uuid AND is_active = true LIMIT 1
+      WHERE objective_id = ${objectiveId}::uuid AND company_id = ${companyId}::uuid AND is_active = true LIMIT 1
     `);
     const affectedObjective = objectiveRows[0]?.objective_name?.trim() ?? '';
+    if (!affectedObjective) throw new Error('Objetivo afectado inválido para la compañía.');
 
     const [impactRows, probRows, pesoRows] = await Promise.all([
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT numeric_value::float8 FROM public.catalog_ra_impact WHERE catalog_impact_id = ${BigInt(impact_id)} AND is_active = true LIMIT 1`),
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT numeric_value::float8 FROM public.catalog_ra_probability WHERE catalog_probability_id = ${BigInt(probability_id)} AND is_active = true LIMIT 1`),
-      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id, descripcion, peso::float8 FROM public.pesos WHERE id = ${Number(peso_id)} LIMIT 1`),
+      prisma.$queryRaw<any[]>(Prisma.sql`SELECT numeric_value::float8 FROM public.catalog_ra_impact WHERE catalog_impact_id = ${BigInt(impactId)} AND is_active = true LIMIT 1`),
+      prisma.$queryRaw<any[]>(Prisma.sql`SELECT numeric_value::float8 FROM public.catalog_ra_probability WHERE catalog_probability_id = ${BigInt(probabilityId)} AND is_active = true LIMIT 1`),
+      prisma.$queryRaw<any[]>(Prisma.sql`SELECT id, descripcion, peso::float8 FROM public.pesos WHERE id = ${pesoIdRaw} LIMIT 1`),
     ]);
 
     const impactValue = impactRows[0]?.numeric_value;
@@ -639,8 +676,8 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
 
     const inherentScore = impactValue * probabilityValue * Number(peso.peso);
     const rationaleJson = JSON.stringify({
-      impact_id: Number(impact_id),
-      probability_id: Number(probability_id),
+      impact_id: Number(impactId),
+      probability_id: Number(probabilityId),
       peso_id: peso.id,
       peso_value: Number(peso.peso),
       peso_descripcion: peso.descripcion,
@@ -648,13 +685,13 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
     });
 
     return await prisma.$transaction(async (tx) => {
-      let finalRiskId = riskId;
+      let finalRiskId = existingRiskId;
       if (finalRiskId) {
         await tx.$executeRaw(Prisma.sql`
           UPDATE public.run_ra_risks
-          SET name = ${name}, description = ${description || null}, risk_category = ${risk_category || null}::uuid,
-              cause = ${cause}, event = ${event}, consequence = ${consequence}, objective_id = ${objective_id}::uuid,
-              affected_objective = ${affectedObjective}, activity_id = ${activity_id}::uuid, owner_id = ${owner_id}::uuid, updated_at = now()
+          SET name = ${name}, description = ${description || null}, risk_category = ${riskCategoryId || null}::uuid,
+              cause = ${cause}, event = ${event}, consequence = ${consequence}, objective_id = ${objectiveId}::uuid,
+              affected_objective = ${affectedObjective}, activity_id = ${effectiveActivityId}::uuid, owner_id = ${effectiveOwnerId}::uuid, updated_at = now()
           WHERE id = ${finalRiskId}::uuid AND run_ra_id = ${runRaId}::uuid
         `);
       } else {
@@ -662,8 +699,8 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
           INSERT INTO public.run_ra_risks (
             id, run_ra_id, code, name, description, risk_category, cause, event, consequence, objective_id, affected_objective, owner_id, activity_id, created_at, updated_at
           ) VALUES (
-            gen_random_uuid(), ${runRaId}::uuid, ${`RSK-${Date.now().toString().slice(-6)}`}, ${name}, ${description || null}, ${risk_category || null}::uuid,
-            ${cause}, ${event}, ${consequence}, ${objective_id}::uuid, ${affectedObjective}, ${owner_id}::uuid, ${activity_id}::uuid, now(), now()
+            gen_random_uuid(), ${runRaId}::uuid, ${`RSK-${Date.now().toString().slice(-6)}`}, ${name}, ${description || null}, ${riskCategoryId || null}::uuid,
+            ${cause}, ${event}, ${consequence}, ${objectiveId}::uuid, ${affectedObjective}, ${effectiveOwnerId}::uuid, ${effectiveActivityId}::uuid, now(), now()
           ) RETURNING id::text
         `);
         finalRiskId = rows[0]?.id;
@@ -683,7 +720,7 @@ export class PrismaLinearRiskRepository implements LinearRiskRepository {
       }
 
       await tx.$executeRaw(Prisma.sql`DELETE FROM public.map_run_ra_risk_controls WHERE run_ra_risk_id = ${finalRiskId}::uuid`);
-      for (const ctrlId of control_ids) {
+      for (const ctrlId of normalizedControlIds) {
         await tx.$executeRaw(Prisma.sql`
           INSERT INTO public.map_run_ra_risk_controls (id, run_ra_risk_id, run_ra_control_id, mitigation_strength, effect_type, reduces_probability, reduces_impact, rationale, created_at, updated_at)
           VALUES (gen_random_uuid(), ${finalRiskId}::uuid, ${ctrlId}::uuid, 1, 'MITIGANTE', true, true, 'Control mitigante existente', now(), now())
