@@ -5,14 +5,14 @@ const statusLabels: Record<KirioxPluginStatus, string> = {
   installed: "Instalado",
   active: "Activo",
   disabled: "Instalado",
-  quarantined: "Instalado",
+  quarantine: "Instalado",
 };
 
 const statusClassNames: Record<KirioxPluginStatus, string> = {
   installed: styles.statusInstalled,
   active: styles.statusActive,
   disabled: styles.statusInstalled,
-  quarantined: styles.statusInstalled,
+  quarantine: styles.statusInstalled,
 };
 
 export function PluginStatusBadge({ status }: { status: KirioxPluginStatus }) {

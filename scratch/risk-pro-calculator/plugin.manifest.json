@@ -1,0 +1,11 @@
+{
+  "id": "risk-pro-calculator",
+  "name": "Calculador de Riesgo Pro",
+  "version": "1.0.0",
+  "description": "Algoritmo avanzado para el cálculo de severidad y frecuencia basado en datos históricos.",
+  "author": "Kiriox Labs",
+  "status": "installed",
+  "permissions": ["read:risk", "write:risk", "register:ui"],
+  "extensionPoints": ["dashboard:widget"],
+  "dependencies": []
+}

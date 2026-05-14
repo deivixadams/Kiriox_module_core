@@ -6,7 +6,10 @@ export class PluginsService implements PluginsModuleContract {
   constructor(private readonly repository: PluginsRepository) {}
 
   async listDashboardData(): Promise<PluginsDashboardData> {
-    const plugins = await this.repository.listInstalled();
+    const [plugins, auditTrail] = await Promise.all([
+      this.repository.listInstalled(),
+      this.repository.listAuditTrail(),
+    ]);
 
     return {
       plugins,
@@ -14,8 +17,9 @@ export class PluginsService implements PluginsModuleContract {
         total: plugins.length,
         active: plugins.filter((plugin) => plugin.status === "active").length,
         disabled: plugins.filter((plugin) => plugin.status === "disabled").length,
-        quarantined: plugins.filter((plugin) => plugin.status === "quarantined").length,
+        quarantine: plugins.filter((plugin) => plugin.status === "quarantine").length,
       },
+      auditTrail,
     };
   }
 }

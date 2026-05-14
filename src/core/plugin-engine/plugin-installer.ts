@@ -5,6 +5,8 @@ import { bootstrapCore } from "@/core/core-bootstrap";
 import { kirioxModuleRegistry } from "@/core/module-registry";
 import { KirioxPluginManifestSchema } from "@/shared/contracts/plugins/plugin-manifest.schema";
 import type { KirioxPluginContract } from "@/shared/contracts/plugins/plugin.contract";
+import { kirioxExtensionPointRegistry } from "./extension-point-registry";
+import { appendPluginAudit } from "./plugin-audit";
 import { validatePluginManifest } from "./plugin-validator";
 import {
   PLUGIN_INSTALLED_DIR,
@@ -106,6 +108,14 @@ function validateDependencies(dependencies: string[]): void {
   }
 }
 
+function validateExtensionPoints(extensionPoints: string[]): void {
+  for (const pointId of extensionPoints) {
+    if (!kirioxExtensionPointRegistry.get(pointId)) {
+      throw new Error(`La zona ${pointId} no está declarada por ningún módulo oficial.`);
+    }
+  }
+}
+
 function validateLoadedContract(
   manifestFromFile: ReturnType<typeof KirioxPluginManifestSchema.parse>,
   contract: KirioxPluginContract
@@ -121,79 +131,105 @@ function validateLoadedContract(
 }
 
 export async function installPluginPackage(uploadedFile: File): Promise<PluginInstallationResult> {
-  if (!uploadedFile.name.toLowerCase().endsWith(".zip")) {
-    throw new Error("Sólo se permiten paquetes .zip.");
-  }
-
-  mkdirSync(PLUGIN_PACKAGES_DIR, { recursive: true });
-  mkdirSync(PLUGIN_QUARANTINE_DIR, { recursive: true });
-  mkdirSync(PLUGIN_INSTALLED_DIR, { recursive: true });
-
   const timestamp = Date.now();
   const packageBaseName = safeDirectoryName(uploadedFile.name.replace(/\.zip$/i, ""));
   const packageFileName = `${timestamp}-${packageBaseName}.zip`;
-  const packageFilePath = join(PLUGIN_PACKAGES_DIR, packageFileName);
   const quarantineDir = join(PLUGIN_QUARANTINE_DIR, `${timestamp}-${packageBaseName}`);
 
-  writeFileSync(packageFilePath, Buffer.from(await uploadedFile.arrayBuffer()));
-  extractZipSafely(packageFilePath, quarantineDir);
+  try {
+    if (!uploadedFile.name.toLowerCase().endsWith(".zip")) {
+      throw new Error("Sólo se permiten paquetes .zip.");
+    }
 
-  const manifestPath = findManifestRecursively(quarantineDir);
-  const manifestRaw = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
-  const validation = validatePluginManifest(manifestRaw);
-  if (!validation.ok) {
-    throw new Error(validation.issues.join(" "));
+    mkdirSync(PLUGIN_PACKAGES_DIR, { recursive: true });
+    mkdirSync(PLUGIN_QUARANTINE_DIR, { recursive: true });
+    mkdirSync(PLUGIN_INSTALLED_DIR, { recursive: true });
+
+    const packageFilePath = join(PLUGIN_PACKAGES_DIR, packageFileName);
+
+    writeFileSync(packageFilePath, Buffer.from(await uploadedFile.arrayBuffer()));
+    extractZipSafely(packageFilePath, quarantineDir);
+
+    const manifestPath = findManifestRecursively(quarantineDir);
+    const manifestRaw = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+    const validation = validatePluginManifest(manifestRaw);
+    if (!validation.ok) {
+      throw new Error(validation.issues.join(" "));
+    }
+
+    const manifest = KirioxPluginManifestSchema.parse(manifestRaw);
+
+    if (!SEMVER_PATTERN.test(manifest.version)) {
+      throw new Error("La versión del plugin debe usar formato semver.");
+    }
+
+    validateDependencies(manifest.dependencies ?? []);
+    validateExtensionPoints(manifest.extensionPoints);
+
+    const pluginRootDir = dirname(manifestPath);
+    const entryFile = findEntryFile(pluginRootDir);
+    const contract = loadPluginContractFromSource(entryFile);
+    validateLoadedContract(manifest, contract);
+
+    const installedDirName = `${safeDirectoryName(manifest.id)}@${safeDirectoryName(manifest.version)}`;
+    const installedDir = join(PLUGIN_INSTALLED_DIR, installedDirName);
+
+    if (existsSync(installedDir)) {
+      throw new Error(`Ya existe un plugin instalado con id ${manifest.id} y versión ${manifest.version}.`);
+    }
+
+    renameSync(pluginRootDir, installedDir);
+    rmSync(quarantineDir, { recursive: true, force: true });
+
+    const registry = readPluginRegistry().filter((record) => !(record.id === manifest.id && record.version === manifest.version));
+    const nextRecord: PluginRegistryRecord = {
+      id: manifest.id,
+      name: manifest.name,
+      version: manifest.version,
+      description: manifest.description ?? "",
+      author: manifest.author ?? "Desconocido",
+      status: "installed",
+      permissions: manifest.permissions,
+      extensionPoints: manifest.extensionPoints,
+      dependencies: manifest.dependencies ?? [],
+      installedPath: installedDir,
+      packageFileName,
+      entryFile: join(installedDir, "index.ts"),
+      contractLoaded: true,
+      installedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    registry.push(nextRecord);
+    writePluginRegistry(registry);
+    appendPluginAudit({
+      timestamp: new Date().toISOString(),
+      pluginId: manifest.id,
+      event: "install",
+      status: "success",
+      message: `Plugin ${manifest.name} instalado correctamente.`,
+      actor: "system",
+    });
+
+    return {
+      ok: true,
+      pluginId: manifest.id,
+      status: "installed",
+      message: `Plugin ${manifest.name} instalado correctamente.`,
+      installedPath: installedDir,
+    };
+  } catch (error) {
+    appendPluginAudit({
+      timestamp: new Date().toISOString(),
+      pluginId: packageBaseName,
+      event: "error",
+      status: "failure",
+      message: error instanceof Error ? error.message : "Error desconocido en instalación.",
+      actor: "system",
+      details: {
+        packageFileName,
+        quarantineDir,
+      },
+    });
+    throw error;
   }
-
-  const manifest = KirioxPluginManifestSchema.parse(manifestRaw);
-
-  if (!SEMVER_PATTERN.test(manifest.version)) {
-    throw new Error("La versión del plugin debe usar formato semver.");
-  }
-
-  validateDependencies(manifest.dependencies ?? []);
-
-  const pluginRootDir = dirname(manifestPath);
-  const entryFile = findEntryFile(pluginRootDir);
-  const contract = loadPluginContractFromSource(entryFile);
-  validateLoadedContract(manifest, contract);
-
-  const installedDirName = `${safeDirectoryName(manifest.id)}@${safeDirectoryName(manifest.version)}`;
-  const installedDir = join(PLUGIN_INSTALLED_DIR, installedDirName);
-
-  if (existsSync(installedDir)) {
-    throw new Error(`Ya existe un plugin instalado con id ${manifest.id} y versión ${manifest.version}.`);
-  }
-
-  renameSync(pluginRootDir, installedDir);
-  rmSync(quarantineDir, { recursive: true, force: true });
-
-  const registry = readPluginRegistry().filter((record) => !(record.id === manifest.id && record.version === manifest.version));
-  const nextRecord: PluginRegistryRecord = {
-    id: manifest.id,
-    name: manifest.name,
-    version: manifest.version,
-    description: manifest.description ?? "",
-    author: manifest.author ?? "Desconocido",
-    status: "installed",
-    permissions: manifest.permissions,
-    extensionPoints: manifest.extensionPoints,
-    dependencies: manifest.dependencies ?? [],
-    installedPath: installedDir,
-    packageFileName,
-    entryFile: join(installedDir, "index.ts"),
-    contractLoaded: true,
-    installedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  registry.push(nextRecord);
-  writePluginRegistry(registry);
-
-  return {
-    ok: true,
-    pluginId: manifest.id,
-    status: "installed",
-    message: `Plugin ${manifest.name} instalado correctamente.`,
-    installedPath: installedDir,
-  };
 }

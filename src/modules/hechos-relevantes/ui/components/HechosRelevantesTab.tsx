@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Filter, Globe, Search, Plus, Calendar, Tag, X } from 'lucide-react';
 import { BuscarHechosPanel } from './BuscarHechosPanel';
+import { PluginZone } from '@/core/plugin-engine/PluginZone';
 
 const HECHOS_RELEVANTES = [
   {
@@ -78,6 +79,8 @@ export function HechosRelevantesTab() {
       </div>
 
       {/* Cards */}
+      <PluginZone pointId="incident:dashboard:widget" label="Extensiones activas del módulo" />
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
         {HECHOS_RELEVANTES.map((hr) => (
           <div

@@ -8,3 +8,4 @@ export const PLUGIN_PACKAGES_DIR = resolve(PLUGINS_BASE_DIR, "packages");
 export const PLUGIN_QUARANTINE_DIR = resolve(PLUGINS_BASE_DIR, "quarantine");
 export const PLUGIN_INSTALLED_DIR = resolve(PLUGINS_BASE_DIR, "installed");
 export const PLUGIN_REGISTRY_FILE = resolve(PLUGINS_BASE_DIR, "registry.json");
+export const PLUGIN_AUDIT_FILE = resolve(PLUGINS_BASE_DIR, "audit.jsonl");

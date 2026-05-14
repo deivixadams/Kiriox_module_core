@@ -6,7 +6,7 @@ export function PluginsSummary({ summary }: { summary: PluginsDashboardSummary }
     { label: "Instalados", value: summary.total },
     { label: "Activos", value: summary.active },
     { label: "Deshabilitados", value: summary.disabled },
-    { label: "Cuarentena", value: summary.quarantined },
+    { label: "Cuarentena", value: summary.quarantine },
   ];
 
   return (

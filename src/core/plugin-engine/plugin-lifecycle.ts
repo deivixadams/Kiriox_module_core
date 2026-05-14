@@ -3,7 +3,7 @@ export type PluginLifecycleStatus =
   | "validated"
   | "installed"
   | "disabled"
-  | "quarantined";
+  | "quarantine";
 
 export interface PluginLifecycleRecord {
   pluginId: string;

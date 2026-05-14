@@ -41,6 +41,8 @@ function progressColor(status: string): string {
   return '#3b82f6';
 }
 
+import { PluginZone } from '@/core/plugin-engine/PluginZone';
+
 export function StepDashboard({
   onNewEvaluation,
   onOpenEvaluation,
@@ -226,6 +228,8 @@ export function StepDashboard({
             );
           })}
         </div>
+
+        <PluginZone pointId="linear-risk:dashboard:widget" label="Extensiones activas del módulo" />
 
         <div style={{ borderRadius: 16, border: '1px solid rgba(255,255,255,0.07)', background: 'rgba(9,18,48,0.85)', overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.3rem', borderBottom: '1px solid rgba(255,255,255,0.06)', flexWrap: 'wrap', gap: '0.7rem' }}>

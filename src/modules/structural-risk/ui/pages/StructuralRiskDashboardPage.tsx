@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Network, Plus, ClipboardList, Pencil, RefreshCw, CheckCircle2, AlertCircle, Eye, Trash2, Play } from 'lucide-react';
+import { PluginZone } from '@/core/plugin-engine/PluginZone';
 
 type DashboardStats = {
   total: number;
@@ -110,7 +111,6 @@ export default function StructuralRiskDashboardPage() {
   }
 
   useEffect(() => {
-    setLoading(true);
     fetch('/api/context/evaluations-list')
       .then((r) => r.json())
       .then((d: { stats: DashboardStats; evaluations: EvalItem[] }) => {
@@ -124,7 +124,6 @@ export default function StructuralRiskDashboardPage() {
   }, []);
 
   useEffect(() => {
-    setLoadingStructural(true);
     fetch('/api/structural-risk/wizard-run')
       .then((r) => r.json())
       .then((d: { runs?: StructuralRunRow[] }) => {
@@ -231,6 +230,8 @@ export default function StructuralRiskDashboardPage() {
           );
         })}
       </section>
+
+      <PluginZone pointId="structural-risk:dashboard:widget" label="Extensiones activas del módulo" />
 
       <section style={{ ...CARD, padding: 0, overflow: 'hidden' }}>
         <div style={{ padding: '0.7rem 1rem', borderBottom: '1px solid rgba(71,85,105,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

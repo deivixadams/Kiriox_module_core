@@ -3,6 +3,7 @@ import type {
   KirioxPluginPermission,
   KirioxPluginStatus,
 } from "@/shared/contracts/plugins/plugin.contract";
+import type { PluginAuditEntry } from "@/core/plugin-engine/plugin-audit";
 
 export interface PluginListItem {
   id: string;
@@ -20,10 +21,11 @@ export interface PluginsDashboardSummary {
   total: number;
   active: number;
   disabled: number;
-  quarantined: number;
+  quarantine: number;
 }
 
 export interface PluginsDashboardData {
   plugins: PluginListItem[];
   summary: PluginsDashboardSummary;
+  auditTrail: PluginAuditEntry[];
 }

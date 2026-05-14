@@ -8,6 +8,7 @@ import {
   Shield,
 } from "lucide-react";
 import type { ComponentType } from "react";
+import { PluginZone } from "@/core/plugin-engine/PluginZone";
 import styles from "./DashboardSimulationsPage.module.css";
 
 type SimulationCard = {
@@ -96,6 +97,11 @@ export default function DashboardSimulationsPage() {
           Este panel permite acceder directamente a Stress testing, Liquidez y
           Monte Carlo.
         </div>
+
+        <PluginZone
+          pointId="simulation:dashboard:widget"
+          label="Extensiones activas del módulo"
+        />
       </div>
     </div>
   );

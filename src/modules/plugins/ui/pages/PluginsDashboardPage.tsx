@@ -3,9 +3,10 @@ import { PluginsModule } from "../../index";
 import { PluginCard } from "../components/PluginCard";
 import { PluginsSummary } from "../components/PluginsSummary";
 import { InstallPluginButton } from "../components/InstallPluginButton";
+import { PluginAuditTrail } from "../components/PluginAuditTrail";
 
 export async function PluginsDashboardPage() {
-  const { plugins, summary } = await PluginsModule.listDashboardData();
+  const { plugins, summary, auditTrail } = await PluginsModule.listDashboardData();
 
   return (
     <main className={styles.dashboard}>
@@ -29,6 +30,8 @@ export async function PluginsDashboardPage() {
           <PluginCard key={plugin.id} plugin={plugin} />
         ))}
       </section>
+
+      <PluginAuditTrail entries={auditTrail} />
     </main>
   );
 }

@@ -25,6 +25,10 @@ export interface PluginRegistryRecord {
   updatedAt: string;
 }
 
+type RawPluginRegistryRecord = Omit<PluginRegistryRecord, "status"> & {
+  status: PluginRegistryRecord["status"] | "quarantined";
+};
+
 const defaultRegistryRecords: PluginRegistryRecord[] = [
   {
     id: "liquidity-advanced-calculator",
@@ -34,8 +38,8 @@ const defaultRegistryRecords: PluginRegistryRecord[] = [
     author: "Kiriox Core",
     status: "active",
     permissions: ["read:risk", "export:data", "register:ui"],
-    extensionPoints: ["dashboard:widget", "report:exporter"],
-    dependencies: ["reportes"],
+    extensionPoints: ["simulation:dashboard:widget"],
+    dependencies: ["simulation"],
     installedPath: null,
     packageFileName: null,
     entryFile: null,
@@ -51,8 +55,8 @@ const defaultRegistryRecords: PluginRegistryRecord[] = [
     author: "Regulatory Compliance",
     status: "active",
     permissions: ["read:company", "read:risk", "read:control", "register:ui"],
-    extensionPoints: ["navigation:item", "dashboard:widget"],
-    dependencies: ["core", "reportes"],
+    extensionPoints: ["monitoring:dashboard:widget"],
+    dependencies: ["monitoring"],
     installedPath: null,
     packageFileName: null,
     entryFile: null,
@@ -67,9 +71,9 @@ const defaultRegistryRecords: PluginRegistryRecord[] = [
     version: "1.0.0",
     author: "Fintech Solutions",
     status: "installed",
-    permissions: ["read:company", "export:data"],
-    extensionPoints: ["report:exporter"],
-    dependencies: ["reportes"],
+    permissions: ["read:risk", "register:ui"],
+    extensionPoints: ["linear-risk:dashboard:widget"],
+    dependencies: ["linear-risk"],
     installedPath: null,
     packageFileName: null,
     entryFile: null,
@@ -85,6 +89,38 @@ function ensurePluginDirectories() {
   mkdirSync(PLUGIN_INSTALLED_DIR, { recursive: true });
 }
 
+function normalizeExtensionPoints(
+  record: RawPluginRegistryRecord,
+): KirioxPluginExtensionPoint[] {
+  return record.extensionPoints.map((point) => {
+    if (point === "linear-risk:dashboard:widget") return point;
+    if (point === "monitoring:dashboard:widget") return point;
+    if (point === "simulation:dashboard:widget") return point;
+    if (point === "structural-risk:dashboard:widget") return point;
+    if (point === "incident:dashboard:widget") return point;
+    if (record.id === "liquidity-advanced-calculator") return "simulation:dashboard:widget";
+    if (record.id === "smv-validator") return "monitoring:dashboard:widget";
+    if (record.id === "excel-exporter-premium") return "linear-risk:dashboard:widget";
+    return "linear-risk:dashboard:widget";
+  });
+}
+
+function normalizeStatus(status: RawPluginRegistryRecord["status"]): KirioxPluginStatus {
+  if (status === "quarantine") return status;
+  if (status === "active") return status;
+  if (status === "disabled") return status;
+  if (status === "installed") return status;
+  return "quarantine";
+}
+
+function normalizeRegistryRecords(records: RawPluginRegistryRecord[]): PluginRegistryRecord[] {
+  return records.map((record) => ({
+    ...record,
+    status: record.status === "quarantined" ? "quarantine" : normalizeStatus(record.status),
+    extensionPoints: normalizeExtensionPoints(record),
+  }));
+}
+
 export function readPluginRegistry(): PluginRegistryRecord[] {
   ensurePluginDirectories();
 
@@ -94,8 +130,14 @@ export function readPluginRegistry(): PluginRegistryRecord[] {
   }
 
   const content = readFileSync(PLUGIN_REGISTRY_FILE, "utf8");
-  const parsed = JSON.parse(content) as PluginRegistryRecord[];
-  return parsed;
+  const parsed = JSON.parse(content) as RawPluginRegistryRecord[];
+  const normalized = normalizeRegistryRecords(parsed);
+
+  if (JSON.stringify(parsed) !== JSON.stringify(normalized)) {
+    writePluginRegistry(normalized);
+  }
+
+  return normalized;
 }
 
 export function writePluginRegistry(records: PluginRegistryRecord[]): void {

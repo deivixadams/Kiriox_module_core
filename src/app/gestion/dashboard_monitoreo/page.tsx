@@ -7,6 +7,7 @@ import {
   ClipboardCheck, Clock, CheckCircle, BarChart2, Calendar,
   ChevronRight, Loader2, CalendarCog,
 } from 'lucide-react';
+import { PluginZone } from '@/core/plugin-engine/PluginZone';
 import type { DashboardData, CatItem, MonitorItem, AlertaRiesgoResidual, SimpleEvento, Kpis } from '@/modules/monitoring/domain/types/MonitoringDashboardTypes';
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
@@ -61,16 +62,18 @@ function Num({ n, color }: { n: number; color: string }) {
 function DonutChart({ data }: { data: { label: string; count: number; pct: number; color: string }[] }) {
   const r = 58, cx = 76, cy = 76;
   const circ = 2 * Math.PI * r;
-  let offset = 0;
   const totalCount = data.reduce((s, d) => s + d.count, 0);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
       <svg width={152} height={152}>
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={22} />
-        {data.map((seg) => {
+        {data.map((seg, index) => {
+          const offset = data
+            .slice(0, index)
+            .reduce((sum, current) => sum + ((current.pct / 100) * circ), 0);
           const dash = (seg.pct / 100) * circ;
           const gap  = circ - dash;
-          const el = (
+          return (
             <circle key={seg.label} cx={cx} cy={cy} r={r}
               fill="none" stroke={seg.color} strokeWidth={22}
               strokeDasharray={`${dash} ${gap}`}
@@ -79,8 +82,6 @@ function DonutChart({ data }: { data: { label: string; count: number; pct: numbe
               transform={`rotate(-90 ${cx} ${cy})`}
             />
           );
-          offset += dash;
-          return el;
         })}
         <text x={cx} y={cy - 6} textAnchor="middle" fill="#f8fafc" fontSize={20} fontWeight={900}>{totalCount}</text>
         <text x={cx} y={cy + 12} textAnchor="middle" fill="#64748b" fontSize={10}>Total</text>
@@ -334,6 +335,8 @@ export default function DashboardMonitoreoPage() {
               {totalAlertas === 0 ? <EmptyState label="Sin alertas activas" /> : <DonutChart data={alertasDonutData} />}
             </div>
           </div>
+
+          <PluginZone pointId="monitoring:dashboard:widget" label="Extensiones activas del módulo" />
 
           {/* Estado por categoría */}
           <div style={{ ...GLASS, padding: '1.25rem', marginBottom: '1.5rem' }}>

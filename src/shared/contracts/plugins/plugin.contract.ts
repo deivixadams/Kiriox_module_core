@@ -2,14 +2,14 @@ export const KIRIOX_PLUGIN_STATUSES = [
   "installed",
   "active",
   "disabled",
-  "quarantined",
+  "quarantine",
 ] as const;
 
 export type KirioxPluginStatus =
   | "installed"
   | "active"
   | "disabled"
-  | "quarantined";
+  | "quarantine";
 
 export const KIRIOX_PLUGIN_PERMISSIONS = [
   "read:company",
@@ -53,21 +53,19 @@ export type KirioxPluginPermission =
   | "listen:events";
 
 export const KIRIOX_PLUGIN_EXTENSION_POINTS = [
-  "navigation:item",
-  "dashboard:widget",
-  "risk:panel",
-  "control:panel",
-  "evidence:panel",
-  "report:exporter",
+  "incident:dashboard:widget",
+  "linear-risk:dashboard:widget",
+  "monitoring:dashboard:widget",
+  "structural-risk:dashboard:widget",
+  "simulation:dashboard:widget",
 ] as const;
 
 export type KirioxPluginExtensionPoint =
-  | "navigation:item"
-  | "dashboard:widget"
-  | "risk:panel"
-  | "control:panel"
-  | "evidence:panel"
-  | "report:exporter";
+  | "incident:dashboard:widget"
+  | "linear-risk:dashboard:widget"
+  | "monitoring:dashboard:widget"
+  | "structural-risk:dashboard:widget"
+  | "simulation:dashboard:widget";
 
 export interface KirioxPluginManifest {
   id: string;
