@@ -232,7 +232,7 @@ export function CatalogProbabilityPage() {
                 <td style={{ ...S.td, color: '#64748b', fontSize: '0.78rem' }}>{item.description ?? '—'}</td>
                 <td style={{ ...S.td, textAlign: 'center', color: '#64748b' }}>{item.ordinal}</td>
                 <td style={{ ...S.td, textAlign: 'right', fontFamily: 'monospace', fontSize: '0.78rem' }}>
-                  {item.numeric_value != null ? item.numeric_value.toFixed(4) : '—'}
+                  {item.numeric_value != null ? Number(item.numeric_value).toFixed(4) : '—'}
                 </td>
                 <td style={{ ...S.td, textAlign: 'center' }}>
                   <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: item.is_active ? 'rgba(16,185,129,0.12)' : 'rgba(100,116,139,0.12)', color: item.is_active ? '#10b981' : '#64748b' }}>

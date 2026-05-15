@@ -13,7 +13,7 @@ export const companyModule: KirioxModuleContract = {
       label: "Empresa",
       href: "/gestion/dashboard_empresa",
       icon: "Building2",
-      order: 10,
+      order: 15,
     },
   },
 
